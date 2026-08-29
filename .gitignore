@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Data files
+memory.json
+
+# Environment (keep .env.example, ignore actual .env)
+.env
+!.env.example
+
+# Models (large binary files — download separately)
+vosk-model*/
+voices/
+models/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+.tmp/
+.neon
+.env.local
+
+# Node dependencies
+node_modules/
+
+# Test and development caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# Personal/runtime notes
+notes/
+legacy/notes.txt
+legacy/jarvis_note.txt
+legacy/for my next travel log in to.txt
+
+# Future environment files (keep the template tracked)
+.env.*
+!.env.example

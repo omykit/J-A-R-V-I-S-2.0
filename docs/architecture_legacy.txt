@@ -1,0 +1,36 @@
+                         USER
+                           │
+             ┌─────────────┴─────────────┐
+             │                           │
+         Voice Input                  Web UI
+             │                           │
+             ▼                           ▼
+      VOSK Speech-to-Text            Text Input
+             │                           │
+             └─────────────┬─────────────┘
+                           ▼
+                    Input / Router
+                           │
+              ┌────────────┴────────────┐
+              │                         │
+              ▼                         ▼
+      Conversational Request      Deterministic Command
+              │                         │
+              ▼                         ▼
+          AI Module               Command Handler
+              │                         │
+              ▼                         ├── Open Applications
+        Ollama / Local LLM            ├── Create Folders
+              │                       ├── Calculator
+              │                       ├── Windows Automation
+              ▼                       └── Other System Actions
+        AI Processing
+              │
+              ▼
+       Response to Web UI
+              │
+              ▼
+          Piper TTS
+              │
+              ▼
+             USER

@@ -1,0 +1,30 @@
+{
+  "assistant_name": "Jarvis",
+  "owner_name": "Omair",
+  "workspace_dir": "",
+  "voice": {
+    "energy_threshold": 250,
+    "pause_threshold": 0.8,
+    "tts_rate": 175,
+    "vosk_model_path": "vosk-model-en-us-0.22",
+    "allow_google_fallback": false,
+    "google_fallback_cooldown_seconds": 90
+  },
+  "ai": {
+    "enabled": true,
+    "base_url": "http://localhost:11434/v1",
+    "model": "jarvis",
+    "api_key": "ollama",
+    "api_key_env": "",
+    "timeout_seconds": 30,
+    "max_tokens": 80,
+    "max_history_messages": 8,
+    "system_prompt": "You are Jarvis, Omair's personal local voice assistant. Be warm, direct, and useful. Use remembered facts and recent conversation when helpful. Answer naturally in one or two short sentences. Never claim an external action has been completed unless the application or tool explicitly reports success. Never claim an email was sent, an email reminder was scheduled, or an email notification was delivered unless a real email subsystem confirms it. Jarvis currently supports local spoken reminders, not email delivery."
+  },
+  "weather": {
+    "openweather_api_key": "",
+    "openweather_api_key_env": "OPENWEATHER_API_KEY",
+    "weather_api_key": "",
+    "weather_api_key_env": "WEATHER_API_KEY"
+  }
+}

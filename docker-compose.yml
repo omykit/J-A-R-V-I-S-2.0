@@ -1,0 +1,68 @@
+# JARVIS Docker Compose
+# NeonDB is used as the database (external, not containerized)
+
+services:
+  memory-service:
+    build:
+      context: ./services/memory
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      JARVIS_MEMORY_DATABASE_URL: ${JARVIS_MEMORY_DATABASE_URL:-postgresql+asyncpg://jarvis:changeme@host.docker.internal:5432/jarvis}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  ai-service:
+    build:
+      context: ./services/ai
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      JARVIS_AI_OLLAMA_BASE_URL: ${JARVIS_AI_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      JARVIS_AI_MODEL: ${JARVIS_AI_MODEL:-jarvis}
+      JARVIS_AI_API_KEY: ${JARVIS_AI_API_KEY:-ollama}
+      JARVIS_AI_MEMORY_SERVICE_URL: http://memory-service:8000
+    depends_on:
+      memory-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  command-service:
+    build:
+      context: ./services/command
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8000"
+    environment:
+      JARVIS_CMD_MEMORY_SERVICE_URL: http://memory-service:8000
+      JARVIS_CMD_WEATHER_API_KEY: ${JARVIS_CMD_WEATHER_API_KEY:-}
+      JARVIS_CMD_OPENWEATHER_API_KEY: ${JARVIS_CMD_OPENWEATHER_API_KEY:-}
+      JARVIS_CMD_DEFAULT_TIMEZONE: ${JARVIS_CMD_DEFAULT_TIMEZONE:-}
+    depends_on:
+      memory-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      JARVIS_GW_AI_SERVICE_URL: http://ai-service:8000
+      JARVIS_GW_COMMAND_SERVICE_URL: http://command-service:8000
+      JARVIS_GW_MEMORY_SERVICE_URL: http://memory-service:8000
+      JARVIS_GW_ALLOWED_ORIGINS: ${JARVIS_GW_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:19006,http://127.0.0.1:3000}
+    depends_on:
+      - memory-service
+      - ai-service
+      - command-service
+    restart: unless-stopped

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jarvis for Omair</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Manrope:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="screen-glow"></div>
+    <main class="app-shell">
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">VOICE-FIRST DESKTOP COMPANION</p>
+          <h1>Jarvis online for Master Omair</h1>
+          <p class="subtitle">
+            Say <span>“are you up jarvis”</span> to activate. Ask for weather,
+            topics, translation, narration, or app shortcuts. End with
+            <span>“alright jarvis thank you for your help”</span>.
+          </p>
+        </div>
+
+        <div class="core-status">
+          <div class="orb-wrap">
+            <div class="orb" id="orb"></div>
+          </div>
+          <p class="status-label">System State</p>
+          <h2 id="statusText">Standing by</h2>
+          <p id="subStatus">Microphone permission is required for wake phrases.</p>
+          <div class="button-row">
+            <button id="startBtn">Start Listening</button>
+            <button id="stopBtn" class="ghost">Stop</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel panel-wide">
+          <div class="panel-head">
+            <h3>Conversation</h3>
+            <span id="heardBadge">No command heard yet</span>
+          </div>
+          <div class="command-bar">
+            <input
+              id="commandInput"
+              type="text"
+              placeholder="Type a command like: are you up jarvis"
+            />
+            <button id="sendCommandBtn">Send Command</button>
+          </div>
+          <div id="conversationLog" class="conversation-log"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Today’s Weather</h3>
+            <span id="weatherLocation">Location pending</span>
+          </div>
+          <div id="weatherCard" class="stack-card empty">
+            <p>Ask Jarvis for today’s weather forecast.</p>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Interest Radar</h3>
+            <span>Daily topic feed</span>
+          </div>
+          <div class="interest-editor">
+            <input
+              id="topicsInput"
+              type="text"
+              placeholder="artificial intelligence, robotics, space"
+            />
+            <button id="saveTopicsBtn">Save Interests</button>
+          </div>
+          <div id="topicsList" class="topics-list"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Explore Topic</h3>
+            <span>Deeper briefings</span>
+          </div>
+          <div id="deepDiveCard" class="stack-card empty">
+            <p>Ask Jarvis to explore a topic in detail.</p>
+          </div>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-head">
+            <h3>Apps & Actions</h3>
+            <span>Visual shortcuts</span>
+          </div>
+          <div id="appsGrid" class="apps-grid"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>

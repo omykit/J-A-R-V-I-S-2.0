@@ -1,0 +1,350 @@
+"""JARVIS Desktop Client — Gateway-connected voice assistant.
+
+Minimal, GUI-less voice loop: listens via Vosk, sends recognized text to the
+JARVIS Gateway, speaks the response via Piper, and dispatches any action
+intents (launch/file_op/music) the command-service emits. This intentionally
+has no Tkinter UI — a React Native/Expo desktop client is the planned
+long-term UI, so no GUI code is invested here.
+
+jarvis_desktop.py (the original Tkinter app, talking to the in-process
+ai_module/command_handler/memory_module) remains the working fallback.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import sys
+import threading
+import time
+import webbrowser
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import pygame
+
+from api_client import check_gateway_health, send_chat
+from voice_engine import VoiceEngine
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("jarvis.client")
+
+CONFIG_PATH = ROOT_DIR / "jarvis_config.json"
+WAKE_PHRASES = [
+    "are you up jarvis",
+    "jarvis are you up",
+    "hey jarvis are you up",
+    "hey jarvis",
+    "hi jarvis",
+]
+EXIT_PHRASE = "thank you jarvis"
+REMINDER_POLL_SECONDS = 30.0
+MUSIC_VOLUME = 0.3
+MUSIC_BASE_NAME = "theme"
+MUSIC_EXTENSIONS = [".mp3", ".wav", ".ogg"]
+
+DEFAULT_CONFIG = {
+    "assistant_name": "Jarvis",
+    "owner_name": "Omair",
+    "workspace_dir": "",
+    "voice": {
+        "energy_threshold": 250,
+        "pause_threshold": 0.8,
+        "tts_rate": 175,
+        "vosk_model_path": "vosk-model-en-us-0.22",
+        "allow_google_fallback": False,
+        "google_fallback_cooldown_seconds": 90,
+    },
+}
+
+# Duplicated from command_handler.py rather than imported: this client must
+# not depend on the legacy in-process ai_module/memory_module import chain —
+# it only knows how to execute the launch intents the gateway hands back.
+APP_TARGETS = {
+    "chrome": {
+        "label": "Google Chrome",
+        "targets": [
+            Path(os.environ.get("ProgramFiles", "")) / "Google/Chrome/Application/chrome.exe",
+            Path(os.environ.get("ProgramFiles(x86)", "")) / "Google/Chrome/Application/chrome.exe",
+            Path(os.environ.get("LocalAppData", "")) / "Google/Chrome/Application/chrome.exe",
+        ],
+    },
+    "whatsapp": {
+        "label": "WhatsApp",
+        "targets": [
+            Path(os.environ.get("LocalAppData", "")) / "WhatsApp/WhatsApp.exe",
+            "whatsapp:",
+            "https://web.whatsapp.com/",
+        ],
+    },
+    "notepad": {"label": "Notepad", "targets": [Path(r"C:/Windows/System32/notepad.exe")]},
+    "calculator": {"label": "Calculator", "targets": ["calc.exe"]},
+    "explorer": {"label": "File Explorer", "targets": [Path(r"C:/Windows/explorer.exe")]},
+    "settings": {"label": "Windows Settings", "targets": ["ms-settings:"]},
+    "youtube": {"label": "YouTube", "targets": ["https://www.youtube.com/"]},
+}
+
+
+def deep_merge(base: dict, incoming: dict) -> dict:
+    merged = dict(base)
+    for key, value in incoming.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_config() -> dict:
+    if not CONFIG_PATH.exists():
+        return dict(DEFAULT_CONFIG)
+    try:
+        raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8-sig"))
+        if not isinstance(raw, dict):
+            raise ValueError("Config root must be a JSON object")
+    except Exception as exc:
+        logger.warning(f"config_load_error:{exc}")
+        return dict(DEFAULT_CONFIG)
+    return deep_merge(DEFAULT_CONFIG, raw)
+
+
+class JarvisClient:
+    def __init__(self, config: dict) -> None:
+        self.config = config
+        self.owner_name = str(config.get("owner_name") or "Omair")
+        self.assistant_name = str(config.get("assistant_name") or "Jarvis")
+        self.workspace_dir = Path(config.get("workspace_dir") or ROOT_DIR)
+        self.notes_dir = self.workspace_dir / "notes"
+        self.notes_dir.mkdir(parents=True, exist_ok=True)
+        self.music_file = self._find_music_file()
+
+        self.active = False
+        self.selected_action = "chrome"
+        self.last_action = "chrome"
+        self.chat_history: list[dict[str, str]] = []
+        self._busy = threading.Event()
+        self._stop_event = threading.Event()
+
+        self.voice_engine = VoiceEngine(config=config, logger=logger.info)
+
+    # ── Music ──
+
+    def _find_music_file(self) -> Path | None:
+        for extension in MUSIC_EXTENSIONS:
+            candidate = ROOT_DIR / f"{MUSIC_BASE_NAME}{extension}"
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _ensure_audio_ready(self) -> bool:
+        if pygame.mixer.get_init():
+            return True
+        try:
+            pygame.mixer.init()
+            return True
+        except pygame.error as exc:
+            logger.warning(f"audio_engine_error:{exc}")
+            return False
+
+    def _execute_music_action(self, action_target: str | None) -> None:
+        if not self._ensure_audio_ready():
+            return
+        if action_target == "stop":
+            pygame.mixer.music.stop()
+        elif action_target in ("play", "restart") and self.music_file is not None:
+            busy = pygame.mixer.music.get_busy()
+            if action_target == "restart" or not busy:
+                pygame.mixer.music.load(str(self.music_file))
+                pygame.mixer.music.play(-1)
+            pygame.mixer.music.set_volume(MUSIC_VOLUME)
+
+    # ── Launch / file-op dispatch ──
+
+    def _execute_launch(self, action_target: str | None) -> None:
+        if not action_target:
+            return
+        action = APP_TARGETS.get(action_target)
+        if action is None:
+            logger.warning(f"unknown_launch_target:{action_target}")
+            return
+        for target in action["targets"]:
+            try:
+                if isinstance(target, Path):
+                    if target.exists():
+                        os.startfile(str(target))
+                        break
+                    continue
+                if isinstance(target, str) and target.startswith("http"):
+                    webbrowser.open(target)
+                    break
+                os.startfile(target)
+                break
+            except OSError:
+                continue
+        else:
+            logger.warning(f"launch_failed:{action_target}")
+            return
+        self.selected_action = action_target
+        self.last_action = action_target
+
+    def _execute_file_op(self, action_target: str | None, action_data: dict | None) -> None:
+        data = action_data or {}
+        name = data.get("name")
+        if not name:
+            return
+        path = self.notes_dir / name
+        try:
+            if action_target == "create_folder":
+                path.mkdir(parents=True, exist_ok=True)
+                os.startfile(str(path.parent))
+            elif action_target == "create_file":
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch(exist_ok=True)
+                os.startfile(str(path))
+            elif action_target == "write_file":
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(str(data.get("content", "")) + "\n", encoding="utf-8")
+                os.startfile(str(path))
+        except OSError as exc:
+            logger.warning(f"file_op_failed:{action_target}:{exc}")
+
+    def _dispatch_action(self, action: str | None, action_target: str | None, action_data: dict | None) -> None:
+        if action == "launch":
+            self._execute_launch(action_target)
+        elif action == "file_op":
+            self._execute_file_op(action_target, action_data)
+        elif action == "music":
+            self._execute_music_action(action_target)
+
+    # ── Speech I/O ──
+
+    def _is_wake_phrase(self, text: str) -> bool:
+        lowered = " ".join(text.lower().strip().split())
+        return any(phrase in lowered for phrase in WAKE_PHRASES)
+
+    def speak(self, text: str) -> None:
+        if text:
+            self.voice_engine.speak_async(text)
+
+    def on_recognized_text(self, text: str) -> None:
+        normalized = " ".join(text.lower().strip().split())
+        if not normalized:
+            return
+
+        if self._is_wake_phrase(normalized):
+            self.active = True
+            logger.info("wake_phrase_detected")
+            self.speak(f"I'm online, {self.owner_name}.")
+            return
+
+        if not self.active:
+            return
+
+        if EXIT_PHRASE in normalized:
+            self.active = False
+            self.speak(f"Alright {self.owner_name}, call me if you need anything.")
+            return
+
+        if self._busy.is_set():
+            logger.info(f"ignored_busy:{normalized}")
+            return
+
+        threading.Thread(target=self._handle_text, args=(text,), daemon=True).start()
+
+    def _handle_text(self, text: str) -> None:
+        self._busy.set()
+        try:
+            logger.info(f"user:{text}")
+            response = send_chat(
+                text,
+                chat_history=self.chat_history,
+                selected_action=self.selected_action,
+                last_action=self.last_action,
+                owner_name=self.owner_name,
+            )
+            if response.error:
+                logger.warning(f"gateway_error:{response.error}")
+                self.speak("I'm having trouble reaching my services right now.")
+                return
+
+            self._dispatch_action(response.action, response.action_target, response.action_data)
+
+            self.chat_history.append({"role": "user", "content": text})
+            self.chat_history.append({"role": "assistant", "content": response.spoken_text})
+            del self.chat_history[:-20]
+
+            logger.info(f"jarvis[{response.source}]:{response.full_text or response.spoken_text}")
+            self.speak(response.spoken_text)
+        finally:
+            self._busy.clear()
+
+    # ── Reminders ──
+
+    def _poll_reminders_loop(self) -> None:
+        gateway_url = os.environ.get("GATEWAY_URL", "http://localhost:8080").rstrip("/")
+        import urllib.request
+
+        while not self._stop_event.is_set():
+            try:
+                request = urllib.request.Request(
+                    f"{gateway_url}/reminders/pending", headers={"Accept": "application/json"}
+                )
+                with urllib.request.urlopen(request, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                for reminder in data.get("reminders", []):
+                    self.speak(f"Reminder: {reminder.get('text', '')}")
+            except Exception as exc:
+                logger.debug(f"reminder_poll_error:{exc}")
+            self._stop_event.wait(REMINDER_POLL_SECONDS)
+
+    # ── Lifecycle ──
+
+    def start(self) -> None:
+        threading.Thread(target=self._poll_reminders_loop, daemon=True).start()
+        self.voice_engine.listen_continuously(
+            on_text=self.on_recognized_text,
+            on_error=lambda message: logger.warning(f"voice_error:{message}"),
+        )
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        self.voice_engine.stop()
+
+
+def main() -> int:
+    print("JARVIS Desktop Client (Gateway Mode)")
+    print(f"Gateway URL: {os.environ.get('GATEWAY_URL', 'http://localhost:8080')}")
+
+    health = check_gateway_health()
+    print(f"Gateway health: {health.get('status', 'unknown')}")
+    if health.get("status") == "unreachable":
+        print("\nERROR: Cannot reach the JARVIS Gateway.")
+        print("Make sure the gateway and services are running:")
+        print("  docker-compose up")
+        return 1
+
+    print("\nServices:")
+    for name, status in health.get("services", {}).items():
+        print(f"  {name}: {status.get('status', 'unknown')}")
+
+    config = load_config()
+    client = JarvisClient(config)
+    client.start()
+
+    print(f"\n{client.assistant_name} is listening. Say a wake phrase to begin (e.g. 'are you up jarvis').")
+    print("Press Ctrl+C to exit.")
+    try:
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        client.stop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
