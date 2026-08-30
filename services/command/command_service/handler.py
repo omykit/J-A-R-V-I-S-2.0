@@ -153,9 +153,8 @@ class CommandHandler:
             except Exception:
                 return CommandResult(handled=True, response="I couldn't save that reminder.")
 
-        name_match = re.search(r"\bmy name is (.+)$", raw_text, re.IGNORECASE)
-        if name_match:
-            name = name_match.group(1).strip().strip(".").strip()
+        name = self._extract_spoken_name(raw_text)
+        if name is not None:
             if not name:
                 return CommandResult(handled=True, response="I didn't catch your name clearly.")
             try:
@@ -184,6 +183,85 @@ class CommandHandler:
                 return CommandResult(handled=True, response="I couldn't save that note.")
 
         return None
+
+    # --- Name capture -------------------------------------------------
+    # Session 1 lost three real attempts -- "call me omair", "from now on
+    # you should address me as ...", "no no call me omer" -- because only the
+    # literal phrase "my name is" matched. They fell through to the AI
+    # service, which has no memory write path, and it then said it does not
+    # store information about individual users: true for the path taken.
+    # Widening this one regex set is the whole fix; routing is untouched.
+    _NAME_PATTERNS = (
+        re.compile(r"\bmy name'?s\s+(.*)$", re.IGNORECASE),
+        re.compile(r"\bmy name is\s+(.*)$", re.IGNORECASE),
+        # A bare "call me" also covers "you can call me", "from now on call
+        # me" and "no no call me", since this is a search, not a fullmatch.
+        re.compile(r"\bcall me\s+(.*)$", re.IGNORECASE),
+        re.compile(r"\baddress me as\s+(.*)$", re.IGNORECASE),
+        re.compile(r"\brefer to me as\s+(.*)$", re.IGNORECASE),
+    )
+
+    # "call me" is also an ordinary request ("call me back", "call me a
+    # taxi"). When the tail opens with one of these it is not a name, and
+    # the utterance falls through to normal routing instead of being stored.
+    _NOT_A_NAME = frozenset(
+        {
+            "a", "an", "the", "back", "later", "tomorrow", "today",
+            "tonight", "now", "soon", "when", "if", "at", "on", "in", "up",
+            "please", "again", "after", "before",
+        }
+    )
+
+    # Vosk appends garble after a name it only half-recognised, e.g.
+    # "call me omer or m a r omer". Cut the tail at the first connector.
+    _NAME_TAIL_STOP = frozenset(
+        {
+            "or", "and", "but", "no", "not", "actually", "um", "uh", "okay",
+            "ok", "please", "thanks", "thank", "yeah", "so", "sorry",
+        }
+    )
+
+    def _clean_spoken_name(self, tail: str) -> str:
+        """Take a sensible leading name out of a possibly garbled tail.
+
+        Rule: drop non-letter noise, stop at the first connector word, stop
+        at a stray single letter (Vosk spelling letters out: "m a r"), and
+        keep at most two tokens -- a first and last name is as much as we
+        are willing to trust from a single utterance.
+        """
+        tokens = re.sub(r"[^A-Za-z'\- ]", " ", tail).split()
+        kept: list[str] = []
+        for token in tokens:
+            if token.lower() in self._NAME_TAIL_STOP:
+                break
+            if len(token) == 1 and kept:
+                break
+            kept.append(token)
+            if len(kept) == 2:
+                break
+        # Capitalise only what was heard in lower case, so that "McDonald"
+        # and an already-correct "Omair" both survive intact.
+        return " ".join(t if t[:1].isupper() else t.capitalize() for t in kept)
+
+    def _extract_spoken_name(self, raw_text: str) -> str | None:
+        """None = no name intent, or a "call me back" style false match.
+
+        "" = a name intent whose tail held nothing usable.
+        """
+        for pattern in self._NAME_PATTERNS:
+            match = pattern.search(raw_text)
+            if match:
+                tail = match.group(1).strip()
+                break
+        else:
+            return None
+
+        if not tail:
+            return ""
+        first = re.sub(r"[^A-Za-z'\-]", "", tail.split()[0]).lower()
+        if first in self._NOT_A_NAME:
+            return None
+        return self._clean_spoken_name(tail)
 
     def _format_memory_summary(self, memories: list[dict] | dict) -> str:
         memories = self._memory_list_to_dict(memories)
