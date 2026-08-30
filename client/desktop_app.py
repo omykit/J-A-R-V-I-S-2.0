@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -33,18 +34,90 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("jarvis.client")
 
 CONFIG_PATH = ROOT_DIR / "jarvis_config.json"
-WAKE_PHRASES = [
-    "are you up jarvis",
-    "jarvis are you up",
-    "hey jarvis are you up",
-    "hey jarvis",
-    "hi jarvis",
-]
+
+# Wake matching (3a). Session 1 took 1 minute 37 seconds and six attempts to
+# wake, and two of those failures were NOT speech-recognition errors: Vosk
+# returned "jarvis" at 0.88 confidence and "hello jarvis" at 0.81, cleanly,
+# and the matcher rejected both -- because it compared against five exact
+# phrases and neither was one of them. Matching the wake WORD anywhere in a
+# normalized utterance subsumes all five phrases and every reasonable
+# variant ("hello jarvis", bare "jarvis", "jarvis are you there").
+WAKE_WORD = "jarvis"
+
+# Kept only for phrases that do not contain the wake word itself. The five
+# original phrases all did, so the wake-word rule already covers them.
+WAKE_PHRASES: list[str] = []
+
 EXIT_PHRASE = "thank you jarvis"
 REMINDER_POLL_SECONDS = 30.0
 MUSIC_VOLUME = 0.3
 MUSIC_BASE_NAME = "theme"
 MUSIC_EXTENSIONS = [".mp3", ".wav", ".ogg"]
+
+# ── Post-STT correction map (3b) ────────────────────────────────────────
+# Vosk ships a fixed lexicon, so a word outside it can never be transcribed
+# correctly no matter how clearly it is spoken -- "Omair" is not in the
+# en-us model's vocabulary, and neither is "Jarvis" reliably. This is not a
+# pronunciation problem and cannot be fixed by speaking more clearly.
+# Every entry below was observed in the session 1 log.
+#
+# Two groups, deliberately applied differently:
+#
+#   WAKE_MISHEARINGS are corrected only at the START or END of an utterance,
+#   because that is where a wake word is spoken. Applying them everywhere
+#   would corrupt ordinary dictation -- "remember that John is my manager"
+#   must not become "remember that jarvis is my manager".
+#
+#   NAME_CORRECTIONS are corrected anywhere, because a name legitimately
+#   appears mid-sentence ("call me omar", "my name is omer").
+WAKE_MISHEARINGS = ("joe was", "journal", "journalists", "john", "jarvos", "dervis")
+
+NAME_CORRECTIONS = {
+    "omar": "Omair",
+    "omer": "Omair",
+    "olmert": "Omair",
+    "almond": "Omair",
+}
+
+_PUNCTUATION_RE = re.compile(r"[^a-z0-9' ]+")
+
+_wake_alternatives = "|".join(sorted(WAKE_MISHEARINGS, key=len, reverse=True))
+_WAKE_MISHEARING_RE = re.compile(
+    rf"^(?:{_wake_alternatives})\b|\b(?:{_wake_alternatives})$", re.IGNORECASE
+)
+
+_NAME_CORRECTION_RE = re.compile(
+    r"\b(?:" + "|".join(sorted(NAME_CORRECTIONS, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def apply_stt_corrections(text: str) -> str:
+    """Repair known Vosk misrecognitions before routing."""
+    corrected = _NAME_CORRECTION_RE.sub(
+        lambda m: NAME_CORRECTIONS[m.group(0).lower()], text
+    )
+    return _WAKE_MISHEARING_RE.sub(WAKE_WORD, corrected)
+
+
+def normalize_utterance(text: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace."""
+    return " ".join(_PUNCTUATION_RE.sub(" ", text.lower()).split())
+
+
+def is_wake_utterance(text: str) -> bool:
+    """True when the wake word appears anywhere in the utterance.
+
+    Token membership, not substring: "jarvis" must be a word of its own so
+    that an unrelated word merely containing it cannot wake the assistant.
+    """
+    normalized = normalize_utterance(text)
+    if not normalized:
+        return False
+    if WAKE_WORD in normalized.split():
+        return True
+    return any(phrase in normalized for phrase in WAKE_PHRASES)
+
 
 DEFAULT_CONFIG = {
     "assistant_name": "Jarvis",
@@ -222,25 +295,36 @@ class JarvisClient:
     # ── Speech I/O ──
 
     def _is_wake_phrase(self, text: str) -> bool:
-        lowered = " ".join(text.lower().strip().split())
-        return any(phrase in lowered for phrase in WAKE_PHRASES)
+        return is_wake_utterance(text)
 
     def speak(self, text: str) -> None:
         if text:
             self.voice_engine.speak_async(text)
 
     def on_recognized_text(self, text: str) -> None:
-        normalized = " ".join(text.lower().strip().split())
+        # Repair known misrecognitions first, so both wake matching and the
+        # gateway see the corrected text. This runs downstream of the voice
+        # engine's TTS echo guard (_looks_like_tts_echo / interrupt check in
+        # voice_engine._listen_loop), which has already dropped anything
+        # that was JARVIS hearing itself -- so widening the wake rule here
+        # cannot reopen that path.
+        corrected = apply_stt_corrections(text)
+        if corrected != text:
+            logger.info(f"stt_corrected:{text!r}->{corrected!r}")
+
+        normalized = normalize_utterance(corrected)
         if not normalized:
             return
 
-        if self._is_wake_phrase(normalized):
-            self.active = True
-            logger.info("wake_phrase_detected")
-            self.speak(f"I'm online, {self.owner_name}.")
-            return
-
+        # Only match the wake word while asleep. Once awake, "jarvis what
+        # time is it" is a command, not another wake -- matching the word
+        # anywhere would otherwise swallow every command that says the name.
         if not self.active:
+            if not self._is_wake_phrase(normalized):
+                return
+            self.active = True
+            logger.info(f"wake_phrase_detected:{normalized!r}")
+            self.speak(f"I'm online, {self.owner_name}.")
             return
 
         if EXIT_PHRASE in normalized:
@@ -252,7 +336,7 @@ class JarvisClient:
             logger.info(f"ignored_busy:{normalized}")
             return
 
-        threading.Thread(target=self._handle_text, args=(text,), daemon=True).start()
+        threading.Thread(target=self._handle_text, args=(corrected,), daemon=True).start()
 
     def _handle_text(self, text: str) -> None:
         self._busy.set()
@@ -334,7 +418,7 @@ def main() -> int:
     client = JarvisClient(config)
     client.start()
 
-    print(f"\n{client.assistant_name} is listening. Say a wake phrase to begin (e.g. 'are you up jarvis').")
+    print(f"\n{client.assistant_name} is listening. Just say '{WAKE_WORD}' to begin.")
     print("Press Ctrl+C to exit.")
     try:
         while True:

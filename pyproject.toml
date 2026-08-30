@@ -60,7 +60,7 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["services"]
+testpaths = ["services", "client/tests"]
 # Needed because multiple services' tests/ dirs use the same basenames
 # (e.g. test_config.py) with no __init__.py packages to disambiguate them.
 addopts = "--import-mode=importlib"
