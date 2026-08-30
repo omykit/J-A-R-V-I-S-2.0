@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from .completion import AIResponse, build_memory_context, get_ai_response
 from .config import settings
 from .ollama import OllamaHealth, check_ollama_health
+from .truthfulness import guard_response
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +128,16 @@ async def chat(body: ChatRequest):
         ),
     )
 
+    # The model has no clock or timezone data, so any current time/date it
+    # produces is fabricated. Replace such answers with an honest refusal.
+    # See truthfulness.py for why this guards the output, not the input.
+    spoken_text, full_text, _blocked_rule = guard_response(
+        result.spoken_text, result.full_text
+    )
+
     return ChatResponse(
-        spoken_text=result.spoken_text,
-        full_text=result.full_text,
+        spoken_text=spoken_text,
+        full_text=full_text,
         model_used=result.model_used,
         error=result.error,
     )
