@@ -393,12 +393,56 @@ class JarvisClient:
             on_error=lambda message: logger.warning(f"voice_error:{message}"),
         )
 
+    def start_text_mode(self) -> None:
+        """Text fallback: same gateway call, same action dispatch, no mic.
+
+        Demo insurance in case STT struggles under interview conditions.
+        The voice path above is the feature and is untouched -- this only
+        replaces where the text comes from. Reminders still poll, and typing
+        is an explicit act, so no wake word is required.
+        """
+        threading.Thread(target=self._poll_reminders_loop, daemon=True).start()
+        self.active = True
+
+    def handle_typed_text(self, text: str) -> None:
+        """Route typed input exactly as recognised speech is routed.
+
+        Deliberately does NOT run apply_stt_corrections: those repair Vosk
+        misrecognitions, and typed text has none to repair -- correcting it
+        would rewrite a deliberately typed "john".
+        """
+        self._handle_text(text)
+
     def stop(self) -> None:
         self._stop_event.set()
         self.voice_engine.stop()
 
 
+def run_text_mode(client: JarvisClient) -> int:
+    """Typed REPL over the same gateway call and action dispatch as voice."""
+    client.start_text_mode()
+    print(f"\n{client.assistant_name} is in TEXT mode. Type a command and press Enter.")
+    print("No wake word is needed. Type 'exit' or press Ctrl+C to quit.\n")
+
+    while True:
+        try:
+            line = input("you> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if not line:
+            continue
+        normalized = normalize_utterance(line)
+        if normalized in {"exit", "quit"} or EXIT_PHRASE in normalized:
+            break
+        client.handle_typed_text(line)
+
+    client.stop()
+    return 0
+
+
 def main() -> int:
+    text_mode = "--text" in sys.argv[1:]
+
     print("JARVIS Desktop Client (Gateway Mode)")
     print(f"Gateway URL: {os.environ.get('GATEWAY_URL', 'http://localhost:8080')}")
 
@@ -416,6 +460,10 @@ def main() -> int:
 
     config = load_config()
     client = JarvisClient(config)
+
+    if text_mode:
+        return run_text_mode(client)
+
     client.start()
 
     print(f"\n{client.assistant_name} is listening. Just say '{WAKE_WORD}' to begin.")
