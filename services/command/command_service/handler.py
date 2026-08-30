@@ -16,7 +16,7 @@ from command_service.intents import (
     matches_weather,
     normalize,
 )
-from command_service.timeloc import build_time_response
+from command_service.timeloc import build_time_response, current_time_in, resolve_default_zone
 from command_service.weather import get_local_timezone, get_location_response, get_weather_response
 from command_service.config import settings
 
@@ -266,6 +266,55 @@ class CommandHandler:
 
         return None
 
+    # Relative-date modifiers we can compute exactly. Anything else (e.g.
+    # "next friday", "in three weeks") is refused rather than silently
+    # answered for today -- answering a question that was not asked is the
+    # same class of untruth as fabricating a time. Broader relative-date
+    # parsing is deliberately out of scope.
+    _DATE_OFFSETS = {"today": 0, "tomorrow": 1, "yesterday": -1}
+
+    def _zone_aware_now(self) -> datetime:
+        """'Now' in the user's timezone, not the container's.
+
+        The container runs in UTC while the user is UTC+3, so naive
+        datetime.now() is a day behind between 21:00 and midnight local --
+        precisely the window JHIT session 1 ran in (23:08-00:12), where it
+        reported "Saturday, August 29" at 00:06 on Sunday the 30th. Time
+        answers were already zone-aware via build_time_response; dates were
+        not. This makes them consistent by reusing the same resolution.
+        """
+        zone = resolve_default_zone(
+            default_timezone=settings.default_timezone, geolocate=get_local_timezone
+        )
+        return current_time_in(zone) if zone else datetime.now()
+
+    def _handle_date_request(self, text: str, *, now: datetime | None = None) -> CommandResult:
+        offset_word = next(
+            (w for w in self._DATE_OFFSETS if re.search(rf"\b{w}\b", text)), None
+        )
+
+        if offset_word is None and re.search(
+            r"\b(next|last|coming|previous|following|in\s+\d+|\d+\s+days?)\b", text
+        ):
+            return CommandResult(
+                handled=True,
+                response=(
+                    "I can only work out today, tomorrow, or yesterday, "
+                    "so I'd rather not guess that one."
+                ),
+                focus_text="Unsupported date offset.",
+            )
+
+        days = self._DATE_OFFSETS.get(offset_word or "today", 0)
+        reference = now if now is not None else self._zone_aware_now()
+        target = reference + timedelta(days=days)
+        formatted = target.strftime("%A, %B %d, %Y")
+        if days == 1:
+            return CommandResult(handled=True, response=f"Tomorrow's date is {formatted}.")
+        if days == -1:
+            return CommandResult(handled=True, response=f"Yesterday's date was {formatted}.")
+        return CommandResult(handled=True, response=f"Today's date is {formatted}.")
+
     def _open_action(self, action_key: str) -> CommandResult:
         action = APP_TARGETS.get(action_key, APP_TARGETS["chrome"])
         label = action["label"]
@@ -331,8 +380,7 @@ class CommandHandler:
                 focus_text=result.focus_text,
             )
         if matches_date(text):
-            now = datetime.now()
-            return CommandResult(handled=True, response=f"Today's date is {now.strftime('%A, %B %d, %Y')}.")
+            return self._handle_date_request(text)
         file_result = self._handle_file_operations(text)
         if file_result is not None:
             return file_result
