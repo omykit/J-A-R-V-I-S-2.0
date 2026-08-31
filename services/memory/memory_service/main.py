@@ -1,12 +1,14 @@
 """JARVIS Memory Service — FastAPI application."""
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import repository as repo
@@ -24,6 +26,8 @@ from .schemas import (
     ReminderResponse,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,6 +39,36 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="JARVIS Memory Service", version="1.0.0", lifespan=lifespan)
+
+
+# Neon lookups intermittently fail inside the container with
+# "socket.gaierror: [Errno -2] Name or service not known" -- a DNS blip, not
+# a credentials or TLS problem. Observed 2026-08-31 18:03 UTC, where it
+# escaped as an unhandled ASGI exception: POST /reminders/check returned 500
+# with a full traceback. /reminders/check is polled every 30s by the
+# gateway, so it is the most exposed endpoint in the service.
+#
+# A database blip is a temporary, retryable condition: report it as 503 with
+# a short reason so callers can back off, instead of a 500 that reads like a
+# bug and leaks internals. This only changes the failure shape -- successful
+# requests are untouched.
+@app.exception_handler(SQLAlchemyError)
+async def _database_error_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    logger.error("DATABASE_UNAVAILABLE %s %s: %s", request.url.path, type(exc).__name__, exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database temporarily unavailable", "error": type(exc).__name__},
+    )
+
+
+@app.exception_handler(OSError)
+async def _network_error_handler(request: Request, exc: OSError) -> JSONResponse:
+    """socket.gaierror is an OSError and can escape outside SQLAlchemy's wrapping."""
+    logger.error("DATABASE_UNREACHABLE %s %s: %s", request.url.path, type(exc).__name__, exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database temporarily unreachable", "error": type(exc).__name__},
+    )
 
 
 # ── Health ──

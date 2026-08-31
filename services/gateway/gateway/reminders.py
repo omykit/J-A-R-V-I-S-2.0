@@ -36,7 +36,7 @@ async def check_once() -> list[dict[str, Any]]:
                     _pending.extend(triggered)
                 return triggered
     except Exception as exc:
-        logger.warning(f"Reminder check failed: {exc}")
+        logger.warning("Reminder check failed: %s: %s", type(exc).__name__, exc)
     return []
 
 

@@ -29,6 +29,11 @@ from .response_cleaner import RESPONSE_RULE_SUFFIX, clean_ai_response, clean_str
 
 logger = logging.getLogger(__name__)
 
+# Wall-clock ceiling for one get_ai_response call, retries and fallback
+# models included. Must stay strictly below the gateway's HTTP_TIMEOUT,
+# which must stay below the client's request timeout. See get_ai_response.
+TOTAL_BUDGET_SECONDS = 25.0
+
 _FALLBACK_RESPONSE_VARIANTS: list[str] = [
     "Apologies, I couldn't generate a response right now.",
     "I'm having trouble forming a response at the moment.",
@@ -262,8 +267,34 @@ def get_ai_response(
     models = candidate_models(settings.model, health.models)
     last_error = ""
 
+    # A wall-clock ceiling for the WHOLE retry sequence, not per attempt.
+    #
+    # Without it the budget multiplies: candidate_models returns the primary
+    # plus any installed fallbacks (jarvis, llama3), and each gets
+    # MAX_RETRIES + 1 attempts, so 4 attempts x 30s could run ~120s. The
+    # gateway gives up at HTTP_TIMEOUT and the caller is long gone, but this
+    # service kept working -- burning GPU on an answer nobody will receive.
+    #
+    # The ladder each layer must respect, innermost first:
+    #     AI total (25s)  <  gateway (35s)  <  client (45s)
+    # Every layer outward must be strictly larger, or the outer one discards
+    # a good answer the inner one was still producing.
+    deadline = time.monotonic() + TOTAL_BUDGET_SECONDS
+
     for model in models:
         for attempt in range(MAX_RETRIES + 1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.error(
+                    "AI_BUDGET_EXHAUSTED after %.0fs across models=%s (last_error=%s)",
+                    TOTAL_BUDGET_SECONDS, models, last_error or "none",
+                )
+                return fallback_ai_response(
+                    error=last_error or f"No answer within {TOTAL_BUDGET_SECONDS:.0f}s"
+                )
+            # Never let a single attempt outlive the remaining budget.
+            timeout = max(1.0, min(timeout, remaining))
+
             use_native = should_use_ollama_native_chat(settings.ollama_base_url)
             if use_native:
                 result = _request_ollama_native(
@@ -288,6 +319,6 @@ def get_ai_response(
 
             last_error = result.error
             if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY_SECONDS)
+                time.sleep(min(RETRY_DELAY_SECONDS, max(0.0, deadline - time.monotonic())))
 
     return fallback_ai_response(error=last_error)

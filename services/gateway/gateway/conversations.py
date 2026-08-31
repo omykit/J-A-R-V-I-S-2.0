@@ -78,7 +78,7 @@ async def log_turn(
         return True
     except Exception as exc:
         # Never propagate: a logging failure must not break a live turn.
-        logger.warning("conversation_log_failed source=%s error=%s", source, exc)
+        logger.warning("conversation_log_failed source=%s error=%s: %s", source, type(exc).__name__, exc)
         return False
 
 

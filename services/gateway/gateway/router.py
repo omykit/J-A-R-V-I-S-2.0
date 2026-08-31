@@ -10,7 +10,17 @@ from .config import settings
 
 logger = logging.getLogger(__name__)
 
-HTTP_TIMEOUT = 30.0
+# Must be strictly GREATER than the AI service's total budget
+# (completion.TOTAL_BUDGET_SECONDS, 25s) and strictly LESS than the client's
+# request timeout (client/api_client.py, 45s):
+#
+#     AI total (25s)  <  gateway (35s)  <  client (45s)
+#
+# This was 30.0 while the AI service's own per-request timeout was also 30 --
+# a dead heat the gateway usually lost, discarding a good answer and speaking
+# "I'm having trouble processing that request right now" instead. A 26s
+# completion was observed in Ollama's log, so this was live, not theoretical.
+HTTP_TIMEOUT = 35.0
 
 
 async def route_text(
@@ -46,7 +56,7 @@ async def route_text(
                         "focus_text": result.get("focus_text"),
                     }
     except Exception as exc:
-        logger.error(f"Command service error: {exc}")
+        logger.error("Command service error: %s: %s", type(exc).__name__, exc)
 
     # Step 2: Fall back to AI service
     try:
@@ -68,7 +78,7 @@ async def route_text(
                     "model_used": result.get("model_used", ""),
                 }
     except Exception as exc:
-        logger.error(f"AI service error: {exc}")
+        logger.error("AI service error: %s: %s", type(exc).__name__, exc)
 
     return {
         "source": "fallback",
