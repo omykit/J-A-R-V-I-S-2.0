@@ -128,9 +128,10 @@ async def upsert_config(key: str, body: ConfigEntry, session: AsyncSession = Dep
 @app.get("/conversations", response_model=list[ConversationResponse])
 async def list_conversations(
     limit: int = 20,
+    session_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
-    return await repo.get_recent_conversations(session, limit=limit)
+    return await repo.get_recent_conversations(session, limit=limit, session_id=session_id)
 
 
 @app.post("/conversations", response_model=ConversationResponse, status_code=201)
@@ -138,4 +139,10 @@ async def add_conversation(
     body: ConversationCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    return await repo.add_conversation(session, role=body.role, content=body.content)
+    return await repo.add_conversation(
+        session,
+        role=body.role,
+        content=body.content,
+        source=body.source,
+        session_id=body.session_id,
+    )

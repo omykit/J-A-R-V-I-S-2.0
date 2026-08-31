@@ -34,6 +34,7 @@ def send_chat(
     selected_action: str = "chrome",
     last_action: str = "chrome",
     owner_name: str = "",
+    session_id: str = "",
 ) -> GatewayResponse:
     """Send a chat request to the gateway and return the response."""
     url = f"{GATEWAY_URL.rstrip('/')}/chat"
@@ -43,6 +44,7 @@ def send_chat(
         "selected_action": selected_action,
         "last_action": last_action,
         "owner_name": owner_name,
+        "session_id": session_id,
     }).encode("utf-8")
 
     request = urllib.request.Request(

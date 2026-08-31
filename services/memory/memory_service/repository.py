@@ -106,9 +106,14 @@ async def upsert_config(session: AsyncSession, key: str, value) -> Config:
 # ── Conversations ──
 
 async def add_conversation(
-    session: AsyncSession, *, role: str, content: str
+    session: AsyncSession,
+    *,
+    role: str,
+    content: str,
+    source: str | None = None,
+    session_id: str | None = None,
 ) -> Conversation:
-    entry = Conversation(role=role, content=content)
+    entry = Conversation(role=role, content=content, source=source, session_id=session_id)
     session.add(entry)
     await session.commit()
     await session.refresh(entry)
@@ -116,10 +121,13 @@ async def add_conversation(
 
 
 async def get_recent_conversations(
-    session: AsyncSession, *, limit: int = 20
+    session: AsyncSession, *, limit: int = 20, session_id: str | None = None
 ) -> list[Conversation]:
+    query = select(Conversation)
+    if session_id:
+        query = query.where(Conversation.session_id == session_id)
     query = (
-        select(Conversation)
+        query
         .order_by(Conversation.created_at.desc())
         .limit(limit)
     )

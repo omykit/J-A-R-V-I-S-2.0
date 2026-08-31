@@ -59,12 +59,16 @@ class ConfigEntry(BaseModel):
 class ConversationCreate(BaseModel):
     role: str = Field(..., pattern="^(user|assistant|system)$")
     content: str
+    source: str | None = Field(default=None, max_length=16)
+    session_id: str | None = Field(default=None, max_length=64)
 
 
 class ConversationResponse(BaseModel):
     id: int
     role: str
     content: str
+    source: str | None = None
+    session_id: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .config import settings
+from .conversations import log_turn_in_background
 from .reminders import poll_reminders_loop, pop_pending
 from .router import check_services_health, route_text
 
@@ -44,6 +45,9 @@ class GatewayRequest(BaseModel):
     selected_action: str = "chrome"
     last_action: str = "chrome"
     owner_name: str = ""
+    # Groups one client run's turns in the conversations table. Clients send
+    # a per-launch id; empty means the turn is logged without a session.
+    session_id: str = ""
 
 
 class GatewayResponse(BaseModel):
@@ -80,6 +84,10 @@ async def chat(body: GatewayRequest):
         selected_action=body.selected_action,
         last_action=body.last_action,
         owner_name=body.owner_name,
+    )
+    # Fire-and-forget: never delay or fail a reply for the sake of logging.
+    log_turn_in_background(
+        user_text=body.text, result=result, session_id=body.session_id
     )
     return GatewayResponse(**result)
 

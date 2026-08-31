@@ -18,6 +18,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 import webbrowser
 from pathlib import Path
 
@@ -194,6 +195,11 @@ class JarvisClient:
         self.notes_dir.mkdir(parents=True, exist_ok=True)
         self.music_file = self._find_music_file()
 
+        # One id per client run, so a session's turns can be grouped (and
+        # read back) in the conversations table. Voice and text mode both
+        # use it; a restart starts a new session.
+        self.session_id = uuid.uuid4().hex
+
         self.active = False
         self.selected_action = "chrome"
         self.last_action = "chrome"
@@ -348,6 +354,7 @@ class JarvisClient:
                 selected_action=self.selected_action,
                 last_action=self.last_action,
                 owner_name=self.owner_name,
+                session_id=self.session_id,
             )
             if response.error:
                 logger.warning(f"gateway_error:{response.error}")

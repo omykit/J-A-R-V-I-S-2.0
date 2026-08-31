@@ -66,10 +66,18 @@ class Conversation(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Which path answered the turn ("ai", "command", "fallback"). Currently
+    # only AI turns are logged, so this is constant in practice -- it exists
+    # so widening the gateway's filter needs no second schema change.
+    source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Groups the turns of one client run together. Nullable because rows
+    # written before this column existed have no session.
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (
         Index("idx_conversations_recent", "created_at"),
+        Index("idx_conversations_session", "session_id", "created_at"),
     )
