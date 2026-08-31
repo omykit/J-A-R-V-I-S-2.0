@@ -8,6 +8,30 @@ RESPONSE_RULE_SUFFIX = (
     "Never include analysis or reasoning."
 )
 
+# Piper cannot speak emoji: they either come out as nothing or as a literal
+# name mid-sentence. Nothing else in the pipeline removes them.
+#
+# The ranges are kept deliberately tight so ordinary text survives. Degree
+# signs, dashes, curly quotes and currency symbols all sit below U+2600 and
+# are untouched -- "Right now in Paris it is 18 degrees" must not lose its
+# punctuation on the way to the speaker.
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001f1e6-\U0001f1ff"  # regional indicators (flag sequences)
+    "\U0001f300-\U0001faff"  # pictographs, emoticons, transport, supplemental
+    "\U00002600-\U000027bf"  # miscellaneous symbols and dingbats
+    "\U00002b00-\U00002bff"  # miscellaneous symbols and arrows
+    "\U0000fe00-\U0000fe0f"  # variation selectors
+    "\U000e0020-\U000e007f"  # tag characters
+    "\U0000200d"             # zero-width joiner
+    "]"
+)
+
+
+def strip_emoji(text: str) -> str:
+    """Remove emoji and pictographs, then tidy the whitespace they leave."""
+    return re.sub(r"\s+", " ", _EMOJI_RE.sub("", text)).strip()
+
 
 def extract_quoted_candidate(text: str) -> str:
     matches = re.findall(r'"([^\\"]{2,80})"', text)
@@ -67,6 +91,7 @@ def clean_ai_response(text: str) -> str:
     cleaned = re.sub(r"```.*?```", " ", cleaned, flags=re.DOTALL)
     cleaned = re.sub(r"`([^`]*)`", r"\1", cleaned)
     cleaned = re.sub(r"^\s*[-*+]\s+", "", cleaned, flags=re.MULTILINE)
+    cleaned = strip_emoji(cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(
         r"\b(currently|basically|actually|simply|right now|just)\b",
