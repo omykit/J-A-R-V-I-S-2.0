@@ -17,7 +17,7 @@ from command_service.intents import (
     normalize,
 )
 from command_service.timeloc import build_time_response, current_time_in, resolve_default_zone
-from command_service.weather import get_local_timezone, get_location_response, get_weather_response
+from command_service.weather import get_local_timezone, get_location_response
 from command_service.config import settings
 
 class CommandResult(BaseModel):
@@ -439,8 +439,22 @@ class CommandHandler:
         if matches_location(text):
             return CommandResult(handled=True, response=get_location_response())
         if matches_weather(text):
-            weather_resp = get_weather_response(user_input, text, settings.weather_api_key, settings.openweather_api_key)
-            return CommandResult(handled=True, response=weather_resp)
+            # The deterministic WeatherAPI/OpenWeatherMap lookup was removed;
+            # weather is answered by the AI service instead.
+            #
+            # This still matches at the ORIGINAL position in the chain rather
+            # than simply deleting the branch. Weather used to be tested
+            # before time and date, and dropping it outright let phrases like
+            # "what is the weather forecast for the day" fall through to
+            # matches_date and get answered with today's date. Intercepting
+            # here and routing to the AI keeps the old precedence exactly.
+            #
+            # weather.get_weather_response is now unused but retained, as are
+            # the two API-key settings, so restoring the deterministic path is
+            # a one-block change. weather.py must stay regardless:
+            # get_local_timezone and get_location_response live there and the
+            # time and location paths depend on them.
+            return CommandResult(handled=False, response="", action="ai_fallback")
         music_result = self._handle_music_commands(text)
         if music_result is not None:
             return music_result
