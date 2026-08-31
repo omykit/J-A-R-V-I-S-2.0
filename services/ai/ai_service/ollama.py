@@ -13,6 +13,17 @@ logger = logging.getLogger(__name__)
 FALLBACK_MODELS = ["llama3", "phi3"]
 MAX_TIMEOUT_SECONDS = 45
 DEFAULT_TIMEOUT_SECONDS = 9
+
+# Cap for the health probe specifically. It was hardcoded at 3.0, which is
+# too tight: a busy Ollama loading a model under GPU pressure can exceed it,
+# be declared dead, and send every turn to the fallback string without ever
+# calling Ollama. Still a cap rather than an unbounded wait, and still well
+# under settings.timeout_seconds (30) so a probe can never outlast a request.
+#
+# This would NOT have prevented the 2026-08-31 outage: Ollama was not running
+# at all, and connection-refused returns in ~5ms. It guards the other
+# failure -- Ollama alive but slow.
+HEALTH_CHECK_TIMEOUT_SECONDS = 8.0
 MAX_RETRIES = 1
 RETRY_DELAY_SECONDS = 0.7
 BACKGROUND_STREAM_TIMEOUT_SECONDS = 60
@@ -66,7 +77,9 @@ def check_ollama_health(base_url: str, timeout_seconds: float) -> OllamaHealth:
     request = urllib.request.Request(tags_url, headers={"Accept": "application/json"})
     started_at = time.perf_counter()
     try:
-        with urllib.request.urlopen(request, timeout=min(timeout_seconds, 3.0)) as response:
+        with urllib.request.urlopen(
+            request, timeout=min(timeout_seconds, HEALTH_CHECK_TIMEOUT_SECONDS)
+        ) as response:
             data = json.loads(response.read().decode("utf-8"))
         models = model_names_from_tags(data)
         health = OllamaHealth(

@@ -55,6 +55,23 @@ def fallback_ai_response(error: str = "") -> AIResponse:
     return AIResponse(spoken_text=text, full_text=text, error=error)
 
 
+# A service outage must be distinguishable from a bad answer BY EAR. The
+# generic "I couldn't generate a response" is what let a four-minute Ollama
+# outage sound like ordinary unhelpfulness in session 2 -- nothing in the
+# spoken reply said the language model was unreachable.
+SERVICE_UNAVAILABLE_SPOKEN = (
+    "I can't reach my language model right now, so I can't answer that one."
+)
+
+
+def service_unavailable_response(error: str = "") -> AIResponse:
+    return AIResponse(
+        spoken_text=SERVICE_UNAVAILABLE_SPOKEN,
+        full_text=SERVICE_UNAVAILABLE_SPOKEN,
+        error=error,
+    )
+
+
 # ── Client cache ──
 
 _AI_CLIENT_CACHE: dict[str, OpenAI] = {}
@@ -221,7 +238,14 @@ def get_ai_response(
         health = check_ollama_health(settings.ollama_base_url, settings.timeout_seconds)
 
     if not health.available:
-        return fallback_ai_response(error=health.error or "Ollama unavailable")
+        # Error, not warning: this is an outage, and every turn taken on this
+        # path is answered without Ollama ever being called.
+        reason = health.error or "Ollama unavailable"
+        logger.error(
+            "AI_UNAVAILABLE returning service-outage reply without calling Ollama: %s",
+            reason,
+        )
+        return service_unavailable_response(error=reason)
 
     max_tokens = _requested_max_tokens(text, settings.max_tokens)
     timeout = min(settings.timeout_seconds, MAX_TIMEOUT_SECONDS)

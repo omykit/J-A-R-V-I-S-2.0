@@ -1,6 +1,7 @@
 """JARVIS AI Service — FastAPI application."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -14,6 +15,15 @@ from .completion import AIResponse, build_memory_context, get_ai_response
 from .config import settings
 from .ollama import OllamaHealth, check_ollama_health
 from .truthfulness import guard_response
+
+# Without this the root logger sits at WARNING, so every logger.info in this
+# service is discarded -- including "Ollama healthy" and the warm-up result.
+# That silence is part of what made the 2026-08-31 outage hard to diagnose:
+# only warnings and errors were ever visible in docker compose logs.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +66,38 @@ class HealthResponse(BaseModel):
     status: str
     detail: str = ""
     models: list[str] = Field(default_factory=list)
+    # The configured model, so a client preflight can check it is actually
+    # present in `models` rather than just that Ollama answered.
+    model: str = ""
+
+
+WARMUP_PROMPT = "hi"
+
+
+async def _warm_up_model() -> None:
+    """Pull the model into VRAM with one trivial inference.
+
+    The first real call otherwise pays the load cost -- 10.5s was measured
+    in session 2, which is the difference between a demo that feels alive
+    and one that looks broken. Runs in the background: startup never waits
+    on it, and a failure is logged and dropped, since the health check has
+    already reported whether Ollama is reachable.
+    """
+    started = time.perf_counter()
+    try:
+        await asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: get_ai_response(WARMUP_PROMPT, health=_ollama_health),
+        )
+        logger.info(
+            "Model warm-up complete in %.2fs model=%s",
+            time.perf_counter() - started,
+            settings.model,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("Model warm-up failed (not fatal): %s", exc)
 
 
 # ── Lifespan ──
@@ -66,9 +108,13 @@ async def lifespan(app: FastAPI):
     _ollama_health = check_ollama_health(settings.ollama_base_url, settings.timeout_seconds)
     if _ollama_health.available:
         logger.info(f"Ollama healthy: models={sorted(_ollama_health.models)}")
+        warmup_task = asyncio.create_task(_warm_up_model())
     else:
         logger.warning(f"Ollama unavailable: {_ollama_health.error}")
+        warmup_task = None
     yield
+    if warmup_task is not None and not warmup_task.done():
+        warmup_task.cancel()
 
 
 app = FastAPI(title="JARVIS AI Service", version="1.0.0", lifespan=lifespan)
@@ -85,10 +131,12 @@ async def health():
             status="ok",
             detail="Ollama is available",
             models=sorted(_ollama_health.models),
+            model=settings.model,
         )
     return HealthResponse(
         status="degraded" if _ollama_health.degraded else "unavailable",
         detail=_ollama_health.error,
+        model=settings.model,
     )
 
 

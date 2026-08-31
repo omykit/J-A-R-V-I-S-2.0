@@ -425,6 +425,43 @@ class JarvisClient:
         self.voice_engine.stop()
 
 
+def preflight(health: dict) -> str:
+    """Return an error message if JARVIS should not start, else "".
+
+    Session 2 spent four minutes producing apologies because Ollama was not
+    running -- the Ollama server log shows no listener until 15:48:04, and
+    the outage window was 15:43-15:47. Nothing in the client said so. The
+    outage itself was not the defect; the silence was.
+    """
+    gateway_url = os.environ.get("GATEWAY_URL", "http://localhost:8080")
+    if health.get("status") == "unreachable":
+        return (
+            f"JARVIS cannot start: the gateway is not reachable at {gateway_url}.\n"
+            "Start the stack with 'docker compose up -d', then run this again."
+        )
+
+    ai = health.get("services", {}).get("ai", {})
+    if ai.get("status") != "ok":
+        detail = ai.get("detail") or "no detail reported"
+        return (
+            "JARVIS cannot start: Ollama is not reachable.\n"
+            f"  reason: {detail}\n"
+            "Start Ollama, then run this again."
+        )
+
+    # Reachable is not enough -- the configured model must actually be there,
+    # or every turn fails at request time instead of at startup.
+    configured = ai.get("model", "")
+    models = ai.get("models", [])
+    if configured and models and configured not in models:
+        return (
+            f"JARVIS cannot start: Ollama is running but the model '{configured}' is missing.\n"
+            f"  available: {', '.join(sorted(models))}\n"
+            f"Run 'ollama pull {configured}' (or create it), then run this again."
+        )
+    return ""
+
+
 def run_text_mode(client: JarvisClient) -> int:
     """Typed REPL over the same gateway call and action dispatch as voice."""
     client.start_text_mode()
@@ -455,15 +492,15 @@ def main() -> int:
 
     health = check_gateway_health()
     print(f"Gateway health: {health.get('status', 'unknown')}")
-    if health.get("status") == "unreachable":
-        print("\nERROR: Cannot reach the JARVIS Gateway.")
-        print("Make sure the gateway and services are running:")
-        print("  docker-compose up")
-        return 1
 
     print("\nServices:")
     for name, status in health.get("services", {}).items():
         print(f"  {name}: {status.get('status', 'unknown')}")
+
+    problem = preflight(health)
+    if problem:
+        print(f"\n{problem}")
+        return 1
 
     config = load_config()
     client = JarvisClient(config)
