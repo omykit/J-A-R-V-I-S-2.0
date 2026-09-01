@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; background:#02040A; }
+  a { color:#00CFEF; text-decoration:none; }
+  a:hover { color:#4DFFFF; }
+  @keyframes jspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes jspinR { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+  @keyframes jsweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes jbreath { 0%,100% { transform: scale(1); opacity: var(--glow); } 50% { transform: scale(var(--pscale)); opacity: calc(var(--glow) * 1.35); } }
+  @keyframes jbar { 0%,100% { transform: scaleY(var(--vamp)); } 50% { transform: scaleY(1); } }
+  @keyframes jblink { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+</style>
+</helmet>
+<div style="position:relative; width:100%; min-height:100vh; background:#02040A; color:#9AA8B2; font-family:Inter, sans-serif; overflow:hidden">
+
+  <div style="position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(0,207,239,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(0,207,239,.045) 1px, transparent 1px); background-size:64px 64px; mask-image:radial-gradient(circle at 50% 50%, transparent 18%, black 78%); -webkit-mask-image:radial-gradient(circle at 50% 50%, transparent 18%, black 78%)"></div>
+  <div style="position:absolute; left:0; right:0; top:22%; height:1px; background:rgba(0,207,239,.07); pointer-events:none"></div>
+  <div style="position:absolute; left:0; right:0; bottom:26%; height:1px; background:rgba(0,207,239,.05); pointer-events:none"></div>
+  <div style="position:absolute; top:0; bottom:0; left:31%; width:1px; background:rgba(0,207,239,.04); pointer-events:none"></div>
+
+  <header data-screen-label="TOP BAR" style="position:relative; z-index:6; display:flex; align-items:center; justify-content:space-between; padding:22px 32px">
+    <div style="display:flex; flex-direction:column; gap:3px">
+      <div style="font-family:Orbitron, sans-serif; font-size:19px; letter-spacing:.34em; color:#DCEEF5">J.A.R.V.I.S</div>
+      <div style="font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:#4A5A66">Just A Rather Very Intelligent System</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:28px">
+      <div style="display:flex; align-items:center; gap:9px">
+        <span style="width:6px; height:6px; border-radius:50%; background:#00CFEF; box-shadow:0 0 8px #00CFEF"></span>
+        <span style="font-family:Orbitron, sans-serif; font-size:10px; letter-spacing:.24em; color:#00CFEF">SYSTEM ONLINE</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:18px">{{ statusDots }}</div>
+    </div>
+  </header>
+
+  <main style="position:relative; z-index:4; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px 0 130px; height:100vh; max-height:900px; min-height:700px">
+
+    <div style="display:flex; flex-direction:column; align-items:center; gap:9px; margin-bottom:14px">
+      <div style="font-family:Orbitron, sans-serif; font-size:9px; letter-spacing:.3em; color:#3E5460">VOICE INPUT</div>
+      <div style="display:flex; align-items:center; gap:8px">
+        <span style="width:4px; height:4px; border-radius:50%; background:rgba(0,207,239,.5)"></span>
+        <div style="--vamp:.22; --vdur:1200ms; display:flex; align-items:center; gap:2px; height:26px; width:96px; justify-content:center">
+          <div style="display:flex; align-items:center; gap:2px; height:26px">{{ bars }}</div>
+        </div>
+        <span style="width:4px; height:4px; border-radius:50%; background:rgba(0,207,239,.5)"></span>
+      </div>
+    </div>
+
+    <div style="--rotA:90s; --rotB:150s; --sweep:22s; --glow:.3; --pscale:1.02; --tick:.22; --c:#00CFEF; --c2:#4DFFFF; --ringop:.16; position:relative; width:440px; height:440px">
+      <div style="position:absolute; inset:0">
+        <div style="{{ orbVars }}">
+          <div style="position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--c2) 55%, transparent) 0%, color-mix(in oklch, var(--c) 22%, transparent) 34%, transparent 62%); animation:jbreath var(--pulse, 7s) ease-in-out infinite"></div>
+          <svg viewBox="0 0 400 400" style="position:absolute; inset:0; width:100%; height:100%; overflow:visible">
+            <circle cx="200" cy="200" r="196" fill="none" stroke="var(--c)" stroke-width="1" style="opacity:calc(var(--ringop) * .7)"></circle>
+            <circle cx="200" cy="200" r="150" fill="none" stroke="var(--c)" stroke-width="1" style="opacity:var(--ringop)"></circle>
+            <circle cx="200" cy="200" r="118" fill="none" stroke="var(--c)" stroke-width="1" style="opacity:calc(var(--ringop) * 1.4)"></circle>
+            <circle cx="200" cy="200" r="86" fill="none" stroke="var(--c)" stroke-width="1" style="opacity:calc(var(--ringop) * .8)"></circle>
+            <g style="opacity:var(--tick); color:var(--c)">{{ ticks }}</g>
+            <g style="transform-origin:200px 200px; animation:jspin var(--rotA) linear infinite">
+              <circle cx="200" cy="200" r="170" fill="none" stroke="var(--c2)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="150 918" style="opacity:.85; filter:drop-shadow(0 0 6px var(--c))"></circle>
+              <circle cx="200" cy="200" r="170" fill="none" stroke="var(--c)" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="48 1020" stroke-dashoffset="-320" style="opacity:.6"></circle>
+            </g>
+            <g style="transform-origin:200px 200px; animation:jspinR var(--rotB) linear infinite">
+              <circle cx="200" cy="200" r="134" fill="none" stroke="var(--c)" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="210 632" style="opacity:.55"></circle>
+              <circle cx="200" cy="200" r="102" fill="none" stroke="var(--c2)" stroke-width="1" stroke-linecap="round" stroke-dasharray="60 580" stroke-dashoffset="-200" style="opacity:.5"></circle>
+            </g>
+            <g style="transform-origin:200px 200px; animation:jsweep var(--sweep) linear infinite">
+              <path d="M200 200 L200 42 A158 158 0 0 1 278 63 Z" fill="var(--c)" style="opacity:.09"></path>
+              <line x1="200" y1="200" x2="200" y2="42" stroke="var(--c2)" stroke-width="1" style="opacity:.5"></line>
+            </g>
+            {{ orbDots }}
+          </svg>
+          <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center">
+            <div style="font-family:Orbitron, sans-serif; font-size:23px; letter-spacing:.3em; color:#E6F7FC; text-shadow:0 0 18px var(--c)">J.A.R.V.I.S</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:16px; margin-top:20px">
+      <span style="font-family:Orbitron, sans-serif; font-size:14px; color:rgba(0,207,239,.4)">{</span>
+      <span style="font-family:Orbitron, sans-serif; font-size:13px; letter-spacing:.26em; color:{{ statusColor }}">{{ statusText }}</span>
+      <span style="font-family:Orbitron, sans-serif; font-size:14px; color:rgba(0,207,239,.4)">}</span>
+    </div>
+
+    <div style="display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:22px">
+      <button type="button" onClick="{{ toggleMic }}" style="{{ micStyle }}" style-hover="border-color:#4DFFFF">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+          <path d="M5.5 12a6.5 6.5 0 0 0 13 0"></path>
+          <line x1="12" y1="18.5" x2="12" y2="21"></line>
+        </svg>
+      </button>
+      <div style="font-family:Orbitron, sans-serif; font-size:9px; letter-spacing:.22em; color:#4A5A66">{{ micLabel }}</div>
+    </div>
+  </main>
+
+  <nav data-screen-label="LEFT RAIL" style="position:absolute; left:18px; top:50%; transform:translateY(-50%); z-index:6; display:flex; flex-direction:column; gap:14px">{{ leftRailIcons }}</nav>
+
+  <button type="button" data-screen-label="RIGHT RAIL" onClick="{{ toggleRight }}" style="position:absolute; right:18px; top:50%; transform:translateY(-50%); z-index:6; display:flex; flex-direction:column; align-items:center; gap:12px; padding:16px 8px; background:rgba(6,16,26,.6); border:1px solid rgba(0,207,239,.18); border-radius:4px; color:#00CFEF; cursor:pointer" style-hover="border-color:#4DFFFF">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4">
+      <line x1="4" y1="7" x2="20" y2="7"></line>
+      <line x1="4" y1="12" x2="14" y2="12"></line>
+      <line x1="4" y1="17" x2="18" y2="17"></line>
+    </svg>
+    <span style="font-family:Orbitron, sans-serif; font-size:9px; letter-spacing:.2em; writing-mode:vertical-rl; color:#5E7280">ACTIVITY</span>
+  </button>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; z-index:6; display:flex; flex-direction:column; align-items:center">
+    <button type="button" onClick="{{ toggleConversation }}" style="display:flex; align-items:center; gap:10px; padding:7px 22px; background:#06101A; border:1px solid rgba(0,207,239,.2); border-bottom:none; border-radius:4px 4px 0 0; color:#9AA8B2; cursor:pointer" style-hover="color:#4DFFFF">
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#00CFEF" stroke-width="1.6"><polyline points="6 14 12 8 18 14"></polyline></svg>
+      <span style="font-family:Orbitron, sans-serif; font-size:9px; letter-spacing:.22em">CONVERSATION</span>
+    </button>
+    <div data-screen-label="BOTTOM DOCK" style="width:100%; display:grid; grid-template-columns:repeat(4, 1fr); border-top:1px solid rgba(0,207,239,.16); background:linear-gradient(180deg, rgba(6,16,26,.75), rgba(2,4,10,.95))">
+      <button type="button" style="display:flex; align-items:center; justify-content:center; gap:10px; padding:16px 0; background:none; border:none; border-right:1px solid rgba(0,207,239,.1); color:#7F909C; cursor:pointer; font-family:Orbitron, sans-serif; font-size:10px; letter-spacing:.2em" style-hover="color:#4DFFFF">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00CFEF" stroke-width="1.4"><polyline points="13 3 6 13 11 13 10 21 17 11 12 11 13 3"></polyline></svg>
+        QUICK ACTIONS
+      </button>
+      <button type="button" onClick="{{ toggleFunctions }}" style="{{ functionsTabStyle }}" style-hover="color:#4DFFFF">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00CFEF" stroke-width="1.4"><rect x="4" y="4" width="16" height="16" rx="2"></rect><line x1="4" y1="10" x2="20" y2="10"></line></svg>
+        FUNCTIONS
+      </button>
+      <button type="button" style="display:flex; align-items:center; justify-content:center; gap:10px; padding:16px 0; background:none; border:none; border-right:1px solid rgba(0,207,239,.1); color:#7F909C; cursor:pointer; font-family:Orbitron, sans-serif; font-size:10px; letter-spacing:.2em" style-hover="color:#4DFFFF">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00CFEF" stroke-width="1.4"><line x1="9" y1="7" x2="20" y2="7"></line><line x1="9" y1="12" x2="20" y2="12"></line><line x1="9" y1="17" x2="20" y2="17"></line><line x1="4" y1="7" x2="5" y2="7"></line><line x1="4" y1="12" x2="5" y2="12"></line><line x1="4" y1="17" x2="5" y2="17"></line></svg>
+        TASKS
+      </button>
+      <button type="button" style="display:flex; align-items:center; justify-content:center; gap:10px; padding:16px 0; background:none; border:none; color:#7F909C; cursor:pointer; font-family:Orbitron, sans-serif; font-size:10px; letter-spacing:.2em" style-hover="color:#4DFFFF">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00CFEF" stroke-width="1.4"><path d="M4 7h5l2 2h9v10H4z"></path></svg>
+        FILES
+      </button>
+    </div>
+  </div>
+
+  <div style="position:absolute; inset:0; z-index:8; pointer-events:none; overflow:hidden">
+
+    <section data-screen-label="PANEL / SYSTEM MODULES" style="{{ leftWrap }}">
+      <div style="{{ leftLine }}"></div>
+      <div style="{{ leftGrid }}"></div>
+      <div style="{{ leftContent }}">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(0,207,239,.14)">
+          <span style="font-family:Orbitron, sans-serif; font-size:10px; letter-spacing:.22em; color:#00CFEF">SYSTEM MODULES</span>
+          <button type="button" onClick="{{ closeLeft }}" style="background:none; border:none; color:#5E7280; cursor:pointer; font-size:14px; line-height:1; padding:0" style-hover="color:#4DFFFF">&#215;</button>
+        </div>
+        <div style="display:flex; flex-direction:column">
+          <div style="display:flex; gap:13px; padding:15px 16px; border-bottom:1px solid rgba(0,207,239,.07)">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00CFEF" stroke-width="1.3" style="margin-top:2px"><rect x="4" y="4" width="16" height="16" rx="2"></rect><circle cx="12" cy="12" r="3.5"></circle></svg>
+            <div style="display:flex; flex-direction:column; gap:9px; flex:1">
+              <div>
+                <div style="font-family:Orbitron, sans-serif; font-size:11px; letter-spacing:.16em; color:#D6E9F0">MEMORY</div>
+                <div style="font-size:11px; color:#5E7280; margin-top:3px">Stored memories</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; padding:10px 12px; background:rgba(0,207,239,.04); border-left:1px solid rgba(0,207,239,.3)">
+                <div style="display:flex; gap:10px; font-family:'JetBrains Mono', monospace; font-size:10.5px"><span style="color:#4A5A66; width:46px">name</span><span style="color:#C3D6DE">Omair</span></div>
+                <div style="display:flex; gap:10px; font-family:'JetBrains Mono', monospace; font-size:10.5px"><span style="color:#4A5A66; width:46px">notes</span><span style="color:#C3D6DE">I prefer Python</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:13px; padding:15px 16px; border-bottom:1px solid rgba(0,207,239,.07)">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00CFEF" stroke-width="1.3" style="margin-top:1px"><rect x="4" y="4" width="16" height="16" rx="2"></rect><polyline points="8 12 11 15 16 9"></polyline></svg>
+            <div>
+              <div style="font-family:Orbitron, sans-serif; font-size:11px; letter-spacing:.16em; color:#D6E9F0">TASKS</div>
+              <div style="font-size:11px; color:#5E7280; margin-top:3px">Your tasks &amp; reminders</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:13px; padding:15px 16px">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00CFEF" stroke-width="1.3" style="margin-top:1px"><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle></svg>
+            <div>
+              <div style="font-family:Orbitron, sans-serif; font-size:11px; letter-spacing:.16em; color:#D6E9F0">SETTINGS</div>
+              <div style="font-size:11px; color:#5E7280; margin-top:3px">Configure J.A.R.V.I.S</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section data-screen-label="PANEL / ACTIVITY FEED" style="{{ rightWrap }}">
+      <div style="{{ rightLine }}"></div>
+      <div style="{{ rightGrid }}"></div>
+      <div style="{{ rightContent }}">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(0,207,239,.14)">
+          <span style="font-family:Orbitron, sans-serif; font-size:10px; letter-spacing:.22em; color:#00CFEF">ACTIVITY FEED</span>
+          <button type="button" onClick="{{ closeRight }}" style="background:none; border:none; color:#5E7280; cursor:pointer; font-size:14px; line-height:1; padding:0" style-hover="color:#4DFFFF">&#215;</button>
+        </div>
+        <div style="display:flex; flex-direction:column; padding:6px 0">{{ activityRows }}</div>
+      </div>
+    </section>
+
+    <section data-screen-label="PANEL / CONVERSATION" style="{{ convWrap }}">
+      <div style="{{ convLine }}"></div>
+      <div style="{{ convGrid }}"></div>
+      <div style="{{ convContent }}">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 22px; border-bottom:1px solid rgba(0,207,239,.14)">
+          <span style="font-family:Orbitron, sans-serif; font-size:10px; letter-spacing:.22em; color:#00CFEF">CONVERSATION</span>
+          <button type="button" onClick="{{ closeConversation }}" style="background:none; border:none; color:#5E7280; cursor:pointer; font-size:14px; line-height:1; padding:0" style-hover="color:#4DFFFF">&#215;</button>
+        </div>
+        <div style="flex:1; overflow:auto; display:flex; flex-direction:column; gap:16px; padding:18px 22px">
+          <div style="display:flex; flex-direction:column; gap:5px">
+            <div style="font-family:Orbitron, sans-serif; font-size:9px; letter-spacing:.2em; color:#5E7280">USER</div>
+            <div style="font-size:13.5px; color:#C3D6DE">what time is it in Tokyo</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:5px; padding-left:14px; border-left:1px solid rgba(0,207,239,.25)">
+            <div style="display:flex; align-items:center; gap:10px">
+              <span style="font-family:Orbitron, sans-serif; font-size:9px; letter-spacing:.2em; color:#00CFEF">JARVIS</span>
+              <span style="font-family:'JetBrains Mono', monospace; font-size:8.5px; letter-spacing:.1em; padding:2px 6px; color:#4DFFFF; border:1px solid rgba(0,207,239,.4)">COMMAND</span>
+            </div>
+            <div style="font-size:13.5px; color:#DCEEF5">The time in Tokyo is 10:39 PM.</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:5px">
+            <div style="font-family:Orbitron, sans-serif; font-size:9px; letter-spacing:.2em; color:#5E7280">USER</div>
+            <div style="font-size:13.5px; color:#C3D6DE">explain RAG in simple terms</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:5px; padding-left:14px; border-left:1px solid rgba(0,207,239,.25)">
+            <div style="display:flex; align-items:center; gap:10px">
+              <span style="font-family:Orbitron, sans-serif; font-size:9px; letter-spacing:.2em; color:#00CFEF">JARVIS</span>
+              <span style="font-family:'JetBrains Mono', monospace; font-size:8.5px; letter-spacing:.1em; padding:2px 6px; color:#4DFFFF; border:1px solid rgba(0,207,239,.4)">AI</span>
+              <span style="font-family:'JetBrains Mono', monospace; font-size:8.5px; padding:2px 6px; color:#7F909C; background:rgba(154,168,178,.09)">jarvis</span>
+            </div>
+            <div style="font-size:13.5px; color:#DCEEF5">...</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; padding:14px 22px; border-top:1px solid rgba(0,207,239,.12)">
+          <input type="text" value="{{ draft }}" onChange="{{ onDraft }}" placeholder="Type a command or message..." style="flex:1; background:rgba(0,207,239,.04); border:1px solid rgba(0,207,239,.16); color:#DCEEF5; font-family:Inter, sans-serif; font-size:13px; padding:11px 14px; outline:none" style-focus="border-color:#00CFEF" />
+          <button type="button" style="display:flex; align-items:center; justify-content:center; width:38px; height:38px; background:none; border:1px solid rgba(0,207,239,.35); color:#00CFEF; cursor:pointer" style-hover="border-color:#4DFFFF; color:#4DFFFF">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="21" y1="3" x2="10" y2="14"></line><polygon points="21 3 15 21 10 14 3 9 21 3"></polygon></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section data-screen-label="PANEL / FUNCTIONS" style="{{ funcWrap }}">
+      <div style="{{ funcLine }}"></div>
+      <div style="{{ funcGrid }}"></div>
+      <div style="{{ funcContent }}">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 22px; border-bottom:1px solid rgba(0,207,239,.14)">
+          <span style="font-family:Orbitron, sans-serif; font-size:10px; letter-spacing:.22em; color:#00CFEF">FUNCTIONS</span>
+          <button type="button" onClick="{{ closeFunctions }}" style="background:none; border:none; color:#5E7280; cursor:pointer; font-size:14px; line-height:1; padding:0" style-hover="color:#4DFFFF">&#215;</button>
+        </div>
+        <div style="display:flex; flex-direction:column; padding:8px 0">{{ functionRows }}</div>
+      </div>
+    </section>
+  </div>
+
+  <div style="{{ switcherStyle }}">
+    <div style="font-family:Orbitron, sans-serif; font-size:8.5px; letter-spacing:.2em; color:#3E5460; margin-bottom:9px">ORB STATE &#183; DEMO</div>
+    <div style="display:flex; flex-direction:column; gap:4px">{{ stateButtons }}</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showStateSwitcher&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Demo&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#00CFEF&quot;,&quot;options&quot;:[&quot;#00CFEF&quot;,&quot;#4DFFFF&quot;,&quot;#7A8CFF&quot;,&quot;#FFB020&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Orb&quot;}}">
+const S = {
+  idle:      { rotA:'110s', rotB:'170s', sweep:'26s', glow:.30, pscale:1.025, pulse:'7s',    tick:.20, ringop:.15, c:'#00CFEF', c2:'#4DFFFF', vamp:.20, vdur:'1500ms', scale:1,     status:'AWAITING COMMAND', dots:.35 },
+  listening: { rotA:'40s',  rotB:'60s',  sweep:'14s', glow:.60, pscale:1.06,  pulse:'2.6s',  tick:.38, ringop:.28, c:'#00CFEF', c2:'#4DFFFF', vamp:.75, vdur:'420ms',  scale:1.05,  status:'LISTENING', dots:.7 },
+  thinking:  { rotA:'18s',  rotB:'11s',  sweep:'2.4s',glow:.42, pscale:1.02,  pulse:'3.4s',  tick:.30, ringop:.22, c:'#00CFEF', c2:'#4DFFFF', vamp:.30, vdur:'900ms',  scale:1.01,  status:'PROCESSING', dots:.5 },
+  speaking:  { rotA:'55s',  rotB:'80s',  sweep:'16s', glow:.55, pscale:1.09,  pulse:'900ms', tick:.34, ringop:.26, c:'#00CFEF', c2:'#4DFFFF', vamp:.85, vdur:'300ms',  scale:1.03,  status:'SPEAKING', dots:.65 },
+  executing: { rotA:'70s',  rotB:'26s',  sweep:'6s',  glow:.38, pscale:1.015, pulse:'2s',    tick:.95, ringop:.24, c:'#00CFEF', c2:'#4DFFFF', vamp:.25, vdur:'800ms',  scale:1,     status:'EXECUTING', dots:1 },
+  error:     { rotA:'900s', rotB:'900s', sweep:'240s',glow:.34, pscale:1.005, pulse:'5s',    tick:.30, ringop:.20, c:'#FFB020', c2:'#FF3B3B', vamp:.12, vdur:'2400ms', scale:.985,  status:'AI SERVICE OFFLINE', dots:.4 }
+};
+const ORDER = ['idle','listening','thinking','speaking','executing','error'];
+const DOTS = ['GATEWAY','AI','COMMAND','MEMORY','OLLAMA'];
+const FEED = [
+  ['12:45:10','REQUEST SENT'], ['12:45:11','ROUTED: COMMAND'], ['12:45:12','TIMEZONE: ASIA/TOKYO'],
+  ['12:45:13','RESPONSE RECEIVED'], ['12:46:02','ROUTED: AI'], ['12:46:02','MODEL: JARVIS']
+];
+const FUNCS = ['OPEN FILE','WEB SEARCH','SET REMINDER','SYSTEM INFO','TAKE NOTE','VOICE NOTE'];
+const EASE = 'cubic-bezier(.22,.75,.2,1)';
+
+class Component extends DCLogic {
+  state = { mode:'idle', mic:false, draft:'', stage:{ left:0, right:0, conv:0, func:0 } };
+  timers = [];
+
+  componentWillUnmount() { this.timers.forEach(clearTimeout); }
+
+  setStage(key, v) { this.setState(s => ({ stage: Object.assign({}, s.stage, { [key]: v }) })); }
+
+  toggle(key) {
+    const open = this.state.stage[key] > 0;
+    const other = key === 'conv' ? 'func' : key === 'func' ? 'conv' : null;
+    if (!open && other && this.state.stage[other] > 0) this.toggle(other);
+    if (open) {
+      this.setStage(key, 2);
+      this.timers.push(setTimeout(() => this.setStage(key, 1), 120));
+      this.timers.push(setTimeout(() => this.setStage(key, 0), 330));
+    } else {
+      this.setStage(key, 1);
+      this.timers.push(setTimeout(() => this.setStage(key, 2), 130));
+      this.timers.push(setTimeout(() => this.setStage(key, 3), 330));
+      this.timers.push(setTimeout(() => this.setStage(key, 4), 450));
+    }
+  }
+
+  panel(key, geom, closedTransform, lineAxis) {
+    const st = this.state.stage[key];
+    const wrap = Object.assign({
+      position:'absolute', display:'block',
+      transition:'transform 280ms ' + EASE + ', opacity 220ms linear',
+      transform: st >= 2 ? 'none' : closedTransform,
+      opacity: st >= 1 ? 1 : 0,
+      pointerEvents: st >= 2 ? 'auto' : 'none',
+      background:'rgba(6,16,26,.94)',
+      border:'1px solid rgba(0,207,239,.18)',
+      boxShadow:'0 0 40px rgba(0,0,0,.6)'
+    }, geom);
+    const line = {
+      position:'absolute', background:'#00CFEF', boxShadow:'0 0 10px #00CFEF',
+      transition:'transform 200ms ' + EASE, transformOrigin: lineAxis === 'y' ? 'top' : 'left',
+      transform: st >= 1 ? 'scale(1)' : (lineAxis === 'y' ? 'scaleY(0)' : 'scaleX(0)'),
+      top: lineAxis === 'y' ? 0 : (key === 'right' ? 0 : 0),
+      bottom: lineAxis === 'y' ? 0 : 'auto',
+      left: lineAxis === 'y' ? (key === 'right' ? 'auto' : 0) : 0,
+      right: lineAxis === 'y' ? (key === 'right' ? 0 : 'auto') : 0,
+      width: lineAxis === 'y' ? '1px' : 'auto',
+      height: lineAxis === 'y' ? 'auto' : '1px'
+    };
+    const grid = {
+      position:'absolute', inset:0, pointerEvents:'none',
+      backgroundImage:'linear-gradient(rgba(0,207,239,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,207,239,.05) 1px, transparent 1px)',
+      backgroundSize:'28px 28px',
+      transition:'opacity 200ms linear', opacity: st >= 3 ? 1 : 0
+    };
+    const content = {
+      position:'relative', display:'flex', flexDirection:'column', height:'100%',
+      transition:'opacity 220ms linear, transform 220ms ' + EASE,
+      opacity: st >= 4 ? 1 : 0, transform: st >= 4 ? 'none' : 'translateY(4px)'
+    };
+    return { wrap: wrap, line: line, grid: grid, content: content };
+  }
+
+  renderVals() {
+    const m = S[this.state.mode] || S.idle;
+    const railIcons = [
+      React.createElement('rect', { x:5, y:5, width:14, height:14, rx:2 }),
+      React.createElement('circle', { cx:12, cy:12, r:7 }),
+      React.createElement('rect', { x:12, y:4, width:11, height:11, transform:'rotate(45 12 12)' }),
+      React.createElement('g', null,
+        React.createElement('line', { x1:5, y1:8, x2:19, y2:8 }),
+        React.createElement('line', { x1:5, y1:12, x2:15, y2:12 }),
+        React.createElement('line', { x1:5, y1:16, x2:17, y2:16 }))
+    ];
+
+    const L = this.panel('left', { left:'70px', top:'96px', width:'286px' }, 'translateX(-22px)', 'y');
+    const R = this.panel('right', { right:'70px', top:'96px', width:'286px' }, 'translateX(22px)', 'y');
+    const C = this.panel('conv', { left:'max(8%, 172px)', right:'8%', bottom:'58px', height:'40vh' }, 'translateY(28px)', 'x');
+    const F = this.panel('func', { left:'max(26%, 220px)', right:'26%', bottom:'58px' }, 'translateY(28px)', 'x');
+
+    return {
+      statusText: m.status,
+      statusColor: this.state.mode === 'error' ? m.c : '#00CFEF',
+      micLabel: this.state.mic ? 'LISTENING' : 'TAP TO SPEAK',
+      draft: this.state.draft,
+      onDraft: e => this.setState({ draft: e.target.value }),
+      toggleMic: () => this.setState(s => ({ mic: !s.mic, mode: s.mic ? 'idle' : 'listening' })),
+      toggleRight: () => this.toggle('right'),
+      toggleConversation: () => this.toggle('conv'),
+      toggleFunctions: () => this.toggle('func'),
+      closeLeft: () => this.toggle('left'),
+      closeRight: () => this.toggle('right'),
+      closeConversation: () => this.toggle('conv'),
+      closeFunctions: () => this.toggle('func'),
+
+      orbVars: {
+        position:'absolute', inset:0,
+        transition:'transform 500ms ' + EASE,
+        transform: 'scale(' + m.scale + ')',
+        '--rotA': m.rotA, '--rotB': m.rotB, '--sweep': m.sweep, '--glow': m.glow,
+        '--pscale': m.pscale, '--pulse': m.pulse, '--tick': m.tick, '--ringop': m.ringop,
+        '--c': this.props.accent || m.c, '--c2': m.c2
+      },
+
+      micStyle: {
+        display:'flex', alignItems:'center', justifyContent:'center',
+        width:'58px', height:'58px', borderRadius:'50%', cursor:'pointer',
+        background: this.state.mic ? 'rgba(0,207,239,.12)' : 'rgba(0,207,239,.04)',
+        border:'1px solid ' + (this.state.mic ? '#4DFFFF' : 'rgba(0,207,239,.35)'),
+        color: this.state.mic ? '#4DFFFF' : '#00CFEF',
+        boxShadow: this.state.mic ? '0 0 22px rgba(0,207,239,.35)' : 'none',
+        transition:'all 220ms ' + EASE
+      },
+
+      functionsTabStyle: {
+        display:'flex', alignItems:'center', justifyContent:'center', gap:'10px',
+        padding:'16px 0', background: this.state.stage.func > 0 ? 'rgba(0,207,239,.07)' : 'none',
+        border:'none', borderRight:'1px solid rgba(0,207,239,.1)',
+        color: this.state.stage.func > 0 ? '#4DFFFF' : '#7F909C',
+        cursor:'pointer', fontFamily:'Orbitron, sans-serif', fontSize:'10px', letterSpacing:'.2em'
+      },
+
+      switcherStyle: {
+        position:'absolute', left:'20px', bottom:'92px', zIndex:9, width:'92px',
+        display: this.props.showStateSwitcher === false ? 'none' : 'block',
+        padding:'10px', background:'rgba(6,16,26,.9)', border:'1px dashed rgba(154,168,178,.25)'
+      },
+
+      statusDots: DOTS.map((d, i) => React.createElement('div', { key:d, style:{ display:'flex', alignItems:'center', gap:'6px' } },
+        React.createElement('span', { style:{ width:'5px', height:'5px', borderRadius:'50%', background: this.state.mode === 'error' && i === 1 ? '#FF3B3B' : '#00CFEF', opacity: m.dots, boxShadow:'0 0 6px currentColor' } }),
+        React.createElement('span', { style:{ fontFamily:"'JetBrains Mono', monospace", fontSize:'9px', letterSpacing:'.14em', color:'#5E7280' } }, d))),
+
+      bars: Array.from({ length: 24 }).map((_, i) => {
+        const h = 6 + Math.round(18 * Math.abs(Math.sin(i * 1.1)) * (i > 3 && i < 20 ? 1 : .45));
+        return React.createElement('div', { key:i, style:{
+          width:'2px', height: h + 'px', background: i % 5 === 0 ? m.c2 : m.c,
+          opacity:.85, transformOrigin:'center',
+          animation:'jbar ' + m.vdur + ' ease-in-out ' + (i * 55) + 'ms infinite',
+          ['--vamp']: m.vamp
+        } });
+      }),
+
+      ticks: Array.from({ length: 60 }).map((_, i) => {
+        const a = (i * 6 - 90) * Math.PI / 180, major = i % 5 === 0;
+        const r1 = 182, r2 = major ? 168 : 175;
+        return React.createElement('line', { key:i,
+          x1: 200 + r1 * Math.cos(a), y1: 200 + r1 * Math.sin(a),
+          x2: 200 + r2 * Math.cos(a), y2: 200 + r2 * Math.sin(a),
+          stroke:'currentColor', strokeWidth: major ? 1.4 : .7 });
+      }),
+
+      orbDots: React.createElement('g', null, [0, 72, 144, 216, 288].map((deg, i) => {
+        const a = (deg - 90) * Math.PI / 180;
+        return React.createElement('circle', { key:i, cx: 200 + 150 * Math.cos(a), cy: 200 + 150 * Math.sin(a), r: 2,
+          fill: m.c2, style:{ opacity:.7, animation:'jblink ' + (2400 + i * 300) + 'ms ease-in-out infinite' } });
+      })),
+
+      leftRailIcons: railIcons.map((ic, i) => React.createElement('button', { key:i, type:'button',
+        onClick: i === 0 ? () => this.toggle('left') : undefined,
+        style:{ display:'flex', alignItems:'center', justifyContent:'center', width:'38px', height:'38px',
+          background: i === 0 && this.state.stage.left > 0 ? 'rgba(0,207,239,.1)' : 'rgba(6,16,26,.6)',
+          border:'1px solid rgba(0,207,239,' + (i === 0 && this.state.stage.left > 0 ? '.45' : '.16') + ')',
+          borderRadius:'3px', color:'#00CFEF', cursor:'pointer' } },
+        React.createElement('svg', { viewBox:'0 0 24 24', width:16, height:16, fill:'none', stroke:'currentColor', strokeWidth:1.3 }, ic))),
+
+      activityRows: FEED.map(([t, txt], i) => React.createElement('div', { key:i,
+        style:{ display:'flex', gap:'12px', padding:'9px 16px', fontFamily:"'JetBrains Mono', monospace", fontSize:'10.5px' } },
+        React.createElement('span', { style:{ color:'#3E5460' } }, t),
+        React.createElement('span', { style:{ color:'#9AA8B2', letterSpacing:'.04em' } }, txt))),
+
+      functionRows: FUNCS.map((f, i) => React.createElement('div', { key:f,
+        style:{ display:'flex', alignItems:'center', gap:'12px', padding:'11px 22px',
+          borderTop: i ? '1px solid rgba(0,207,239,.07)' : 'none' } },
+        React.createElement('span', { style:{ width:'4px', height:'4px', background:'#00CFEF' } }),
+        React.createElement('span', { style:{ fontFamily:'Orbitron, sans-serif', fontSize:'10.5px', letterSpacing:'.18em', color:'#C3D6DE' } }, f))),
+
+      stateButtons: ORDER.map(k => React.createElement('button', { key:k, type:'button',
+        onClick: () => this.setState({ mode:k, mic: k === 'listening' }),
+        style:{ padding:'6px 9px', background: this.state.mode === k ? 'rgba(0,207,239,.14)' : 'transparent',
+          border:'1px solid ' + (this.state.mode === k ? '#00CFEF' : 'rgba(154,168,178,.22)'),
+          color: this.state.mode === k ? '#4DFFFF' : '#7F909C', cursor:'pointer',
+          fontFamily:'Orbitron, sans-serif', fontSize:'8.5px', letterSpacing:'.14em', textTransform:'uppercase' } }, k)),
+
+      leftWrap: L.wrap, leftLine: L.line, leftGrid: L.grid, leftContent: L.content,
+      rightWrap: R.wrap, rightLine: R.line, rightGrid: R.grid, rightContent: R.content,
+      convWrap: C.wrap, convLine: C.line, convGrid: C.grid, convContent: C.content,
+      funcWrap: F.wrap, funcLine: F.line, funcGrid: F.grid, funcContent: F.content
+    };
+  }
+}
+</script>
+</body>
+</html>
