@@ -29,6 +29,16 @@ export default function JarvisOrb({ state = "standby" }) {
       speed: 6,
       label: "SPEAKING",
     },
+
+    // Deliberately restrained: the rotation nearly stalls and the glow dims,
+    // so failure reads as the system losing power rather than as an alarm.
+    // #ff3b3b is the error red already defined in the design reference.
+    error: {
+      color: "#ff5f5f",
+      glow: "rgba(255,59,59,0.22)",
+      speed: 60,
+      label: "ERROR",
+    },
   };
 
   const current = states[state] || states.standby;
@@ -47,7 +57,14 @@ export default function JarvisOrb({ state = "standby" }) {
             opacity: [0.45, 0.8, 0.45],
           }}
           transition={{
-            duration: state === "listening" ? 1.5 : 5,
+            duration:
+              state === "listening"
+                ? 1.5
+                : state === "thinking"
+                ? 2
+                : state === "error"
+                ? 6
+                : 5,
             repeat: Infinity,
             ease: "easeInOut",
           }}
@@ -109,6 +126,10 @@ export default function JarvisOrb({ state = "standby" }) {
                 ? [1, 1.08, 1]
                 : state === "speaking"
                 ? [1, 1.05, 1]
+                : state === "thinking"
+                ? [1, 1.045, 1]
+                : state === "error"
+                ? [1, 1.006, 1]
                 : [1, 1.02, 1],
           }}
           transition={{
@@ -117,6 +138,10 @@ export default function JarvisOrb({ state = "standby" }) {
                 ? 1
                 : state === "speaking"
                 ? 1.3
+                : state === "thinking"
+                ? 0.9
+                : state === "error"
+                ? 5
                 : 4,
             repeat: Infinity,
             ease: "easeInOut",

@@ -1,36 +1,30 @@
 import { motion } from "framer-motion";
 import {
   Activity,
+  AlertCircle,
   CheckCircle2,
   Circle,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 
-const activities = [
-  {
-    label: "SYSTEM READY",
-    time: "NOW",
-    status: "active",
-  },
-  {
-    label: "VOICE ENGINE",
-    time: "READY",
-    status: "complete",
-  },
-  {
-    label: "MEMORY SERVICE",
-    time: "READY",
-    status: "complete",
-  },
-  {
-    label: "COMMAND GATEWAY",
-    time: "READY",
-    status: "complete",
-  },
-];
+// The previous static list (SYSTEM READY / VOICE ENGINE / ...) was invented:
+// the backend emits no event stream, so nothing could have produced it. The
+// panel now shows only events the browser actually observed -- a request it
+// sent, a response it received, a failure it hit.
 
-export default function ActivityPanel({ isOpen, onToggle }) {
+/** Icon and colour per event kind. */
+function eventStyle(kind) {
+  if (kind === "request") {
+    return { tone: "text-slate-400", icon: Circle, iconClass: "text-cyan-400" };
+  }
+  if (kind === "error") {
+    return { tone: "text-red-300", icon: AlertCircle, iconClass: "text-red-400" };
+  }
+  return { tone: "text-slate-400", icon: CheckCircle2, iconClass: "text-slate-600" };
+}
+
+export default function ActivityPanel({ isOpen, onToggle, events = [] }) {
   return (
     <>
       {/* ACTIVITY PANEL */}
@@ -81,47 +75,56 @@ export default function ActivityPanel({ isOpen, onToggle }) {
           </div>
 
           {/* ACTIVITY LIST */}
-          <div className="space-y-2 px-5 py-4">
-            {activities.map((item) => (
-              <div
-                key={item.label}
-                className="
-                  flex
-                  items-center
-                  justify-between
-                  border
-                  border-cyan-400/10
-                  bg-cyan-400/[0.02]
-                  px-4
-                  py-3.5
-                "
-              >
-                <div className="flex items-center gap-3">
-                  {item.status === "active" ? (
-                    <Circle
-                      size={8}
-                      fill="currentColor"
-                      strokeWidth={1.5}
-                      className="text-cyan-400"
-                    />
-                  ) : (
-                    <CheckCircle2
-                      size={13}
-                      strokeWidth={1.4}
-                      className="text-slate-600"
-                    />
-                  )}
-
-                  <span className="whitespace-nowrap text-[9px] tracking-[0.12em] text-slate-400">
-                    {item.label}
-                  </span>
-                </div>
-
-                <span className="whitespace-nowrap text-[8px] tracking-[0.1em] text-slate-600">
-                  {item.time}
-                </span>
+          <div className="max-h-[300px] space-y-2 overflow-y-auto px-5 py-4">
+            {events.length === 0 ? (
+              <div className="px-1 py-6 text-center text-[8px] tracking-[0.18em] text-[#3f505c]">
+                NO ACTIVITY YET
               </div>
-            ))}
+            ) : null}
+
+            {events.map((item) => {
+              const { tone, icon: Icon, iconClass } = eventStyle(item.kind);
+
+              return (
+                <div
+                  key={item.id}
+                  className="
+                    border
+                    border-cyan-400/10
+                    bg-cyan-400/[0.02]
+                    px-4
+                    py-3
+                  "
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Icon
+                        size={item.kind === "request" ? 8 : 13}
+                        fill={item.kind === "request" ? "currentColor" : "none"}
+                        strokeWidth={1.4}
+                        className={iconClass}
+                      />
+
+                      <span
+                        className={`whitespace-nowrap text-[9px] tracking-[0.12em] ${tone}`}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+
+                    <span className="whitespace-nowrap text-[8px] tracking-[0.1em] text-slate-600">
+                      {item.time}
+                    </span>
+                  </div>
+
+                  {item.detail ? (
+                    <div className="mt-1.5 truncate pl-6 text-[8px] tracking-[0.08em] text-[#50606d]">
+                      {item.detail}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
 
           {/* FOOTER */}

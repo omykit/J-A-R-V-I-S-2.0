@@ -9,6 +9,7 @@ import {
   Activity,
   Wifi,
   CheckCircle2,
+  XCircle,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -32,54 +33,60 @@ const commands = [
   },
 ];
 
-const metrics = [
-  {
-    label: "CORE LOAD",
-    value: 84,
-    icon: Cpu,
-  },
-  {
-    label: "MEMORY",
-    value: 62,
-    icon: MemoryStick,
-  },
-  {
-    label: "PROCESSING",
-    value: 91,
-    icon: Activity,
-  },
-];
+// The previous CORE LOAD / MEMORY / PROCESSING bars were hardcoded to
+// 84 / 62 / 91. Two of those had no backend source at all -- there is no
+// core-load or processing metric anywhere in JARVIS. They are replaced with
+// the service statuses the gateway genuinely reports via GET /health, rather
+// than with invented percentages.
 
-function MetricBar({ label, value, icon: Icon }) {
+/** Map a gateway status string to how it should read and colour in the UI. */
+function presentStatus(status) {
+  if (status === "ok") {
+    return { label: "ONLINE", tone: "text-cyan-300", dot: "bg-cyan-400 shadow-[0_0_8px_#00cfef]" };
+  }
+  if (status === "unknown" || status === undefined) {
+    return { label: "—", tone: "text-[#43545f]", dot: "bg-[#2a3a44]" };
+  }
+  if (status === "degraded") {
+    return { label: "DEGRADED", tone: "text-amber-400", dot: "bg-amber-400 shadow-[0_0_8px_#ffb020]" };
+  }
+  // unreachable / unavailable / error
+  return { label: status.toUpperCase(), tone: "text-red-400", dot: "bg-red-400 shadow-[0_0_8px_#ff3b3b]" };
+}
+
+function ServiceRow({ label, status, icon: Icon, note }) {
+  const { label: statusLabel, tone, dot } = presentStatus(status);
+
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[8px] tracking-[0.17em] text-[#667985]">
-          <Icon size={12} strokeWidth={1.4} />
-          <span>{label}</span>
-        </div>
-
-        <span className="text-[8px] tracking-[0.12em] text-cyan-300">
-          {value}%
-        </span>
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2 text-[8px] tracking-[0.17em] text-[#667985]">
+        <Icon size={12} strokeWidth={1.4} />
+        <span>{label}</span>
       </div>
 
-      <div className="h-[3px] w-full overflow-hidden bg-[#0b1822]">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${value}%` }}
-          transition={{
-            duration: 0.8,
-            ease: "easeOut",
-          }}
-          className="h-full bg-cyan-400 shadow-[0_0_8px_rgba(0,207,239,0.65)]"
-        />
+      <div className={`flex items-center gap-1.5 text-[8px] tracking-[0.12em] ${tone}`}>
+        {note ? <span className="text-[7px] text-[#43545f]">{note}</span> : null}
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+        {statusLabel}
       </div>
     </div>
   );
 }
 
-export default function ControlPanel({ isOpen, onToggle }) {
+export default function ControlPanel({ isOpen, onToggle, health }) {
+  const isOffline = health?.overall === "offline";
+  const isLoading = health?.overall === "loading";
+
+  const panelStatusLabel = isLoading
+    ? "CHECKING"
+    : { online: "ONLINE", degraded: "DEGRADED", offline: "OFFLINE" }[health?.overall] ?? "UNKNOWN";
+
+  const panelStatusTone = isLoading
+    ? "text-[#3f505c]"
+    : { online: "text-[#3f505c]", degraded: "text-amber-400", offline: "text-red-400" }[
+        health?.overall
+      ] ?? "text-[#3f505c]";
+
   return (
     <>
       {/* CONTROL PANEL */}
@@ -110,15 +117,23 @@ export default function ControlPanel({ isOpen, onToggle }) {
         {/* HEADER */}
         <div className="flex h-[52px] items-center justify-between border-b border-cyan-400/10 px-4">
           <div className="flex items-center gap-3">
-            <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#00cfef]" />
+            <span
+              className={`h-2 w-2 rounded-full ${
+                isOffline
+                  ? "bg-red-400 shadow-[0_0_8px_#ff3b3b]"
+                  : health?.overall === "degraded"
+                  ? "bg-amber-400 shadow-[0_0_8px_#ffb020]"
+                  : "bg-cyan-400 shadow-[0_0_8px_#00cfef]"
+              }`}
+            />
 
             <span className="text-[9px] tracking-[0.22em] text-cyan-300">
               JARVIS CONTROL
             </span>
           </div>
 
-          <span className="text-[7px] tracking-[0.16em] text-[#3f505c]">
-            ONLINE
+          <span className={`text-[7px] tracking-[0.16em] ${panelStatusTone}`}>
+            {panelStatusLabel}
           </span>
         </div>
 
@@ -171,20 +186,40 @@ export default function ControlPanel({ isOpen, onToggle }) {
               </div>
 
               <div className="mt-1 text-[7px] tracking-[0.14em] text-[#43545f]">
-                REAL-TIME CORE MONITORING
+                {isOffline
+                  ? "GATEWAY UNREACHABLE"
+                  : isLoading
+                  ? "CONTACTING GATEWAY"
+                  : "LIVE SERVICE HEALTH"}
               </div>
             </div>
           </div>
 
           <div className="space-y-3.5">
-            {metrics.map((metric) => (
-              <MetricBar
-                key={metric.label}
-                label={metric.label}
-                value={metric.value}
-                icon={metric.icon}
-              />
-            ))}
+            <ServiceRow
+              label="MEMORY SERVICE"
+              status={isOffline ? "unreachable" : health?.memory}
+              icon={MemoryStick}
+            />
+
+            <ServiceRow
+              label="AI SERVICE"
+              status={isOffline ? "unreachable" : health?.ai}
+              icon={Cpu}
+            />
+
+            <ServiceRow
+              label="COMMAND SERVICE"
+              status={isOffline ? "unreachable" : health?.command}
+              icon={Activity}
+            />
+
+            <ServiceRow
+              label="OLLAMA"
+              status={isOffline ? "unreachable" : health?.ollama?.status}
+              icon={Brain}
+              note={!isOffline && health?.ollama?.model ? health.ollama.model : ""}
+            />
           </div>
         </section>
 
@@ -197,15 +232,29 @@ export default function ControlPanel({ isOpen, onToggle }) {
             NETWORK
           </div>
 
-          <div className="flex items-center gap-1.5 text-[8px] tracking-[0.12em] text-cyan-300">
-            <CheckCircle2 size={11} strokeWidth={1.5} />
-            CONNECTED
+          <div
+            className={`flex items-center gap-1.5 text-[8px] tracking-[0.12em] ${
+              isOffline ? "text-red-400" : isLoading ? "text-[#43545f]" : "text-cyan-300"
+            }`}
+          >
+            {isOffline ? (
+              <XCircle size={11} strokeWidth={1.5} />
+            ) : (
+              <CheckCircle2 size={11} strokeWidth={1.5} />
+            )}
+            {isOffline ? "DISCONNECTED" : isLoading ? "CHECKING" : "CONNECTED"}
           </div>
         </section>
 
         {/* FOOTER */}
         <div className="border-t border-cyan-400/10 px-4 py-2.5 text-[7px] tracking-[0.15em] text-[#3f505c]">
-          JARVIS CORE • STABLE
+          {isOffline
+            ? "JARVIS CORE • UNREACHABLE"
+            : health?.overall === "degraded"
+            ? "JARVIS CORE • DEGRADED"
+            : health?.lastUpdated
+            ? `JARVIS CORE • STABLE • ${health.lastUpdated.toLocaleTimeString()}`
+            : "JARVIS CORE • STABLE"}
         </div>
 
         {/* CLOSE BUTTON */}
